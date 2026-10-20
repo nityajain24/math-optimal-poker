@@ -1,0 +1,879 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Poker Math">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Math-Optimal Poker</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: one calm reading column, like a notebook beside the table. Cards are the only "objects". */
+:root{
+  --bg:#F4F5F2; --surface:#FFFFFF; --ink:#15191A; --muted:#5D6661; --line:#DCE0DA;
+  --felt:#1D6A4D; --felt-soft:#E2EEE8; --suit:#C1352C; --suit-soft:#F7E3E0; --gold:#B5842A;
+  --card-bg:#FFFFFF; --card-ink:#15191A; --card-red:#C1352C; --card-line:#CDD2CC;
+  --display:"Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --body:"Figtree", "Avenir Next", system-ui, sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F1312; --surface:#171C1A; --ink:#E8ECE9; --muted:#9BA49F; --line:#29302D;
+    --felt:#52B68B; --felt-soft:#1A2E25; --suit:#E46A5F; --suit-soft:#3A201D; --gold:#DDB25A;
+    --card-bg:#EEF0EC; --card-ink:#15191A; --card-red:#C1352C; --card-line:#EEF0EC;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F1312; --surface:#171C1A; --ink:#E8ECE9; --muted:#9BA49F; --line:#29302D;
+  --felt:#52B68B; --felt-soft:#1A2E25; --suit:#E46A5F; --suit-soft:#3A201D; --gold:#DDB25A;
+  --card-bg:#EEF0EC; --card-ink:#15191A; --card-red:#C1352C; --card-line:#EEF0EC;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.6;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:28px 64px}
+#app{max-width:660px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+h1,h2,h3{font-family:var(--display);font-weight:700;line-height:1.15;margin:0;text-wrap:balance;letter-spacing:-.01em}
+h1{font-size:2.3rem} h2{font-size:1.55rem} h3{font-size:1.1rem}
+p{margin:0}
+a{color:var(--felt)}
+.eyebrow{font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.muted{color:var(--muted)}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--felt);outline-offset:2px}
+
+/* header */
+.top{display:flex;flex-direction:column;gap:10px}
+.top p{color:var(--muted);max-width:52ch}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.stat{padding:12px 4px;display:flex;flex-direction:column;gap:2px}
+.stat b{font-family:var(--mono);font-size:1.25rem;font-weight:500}
+.stat span{font-size:.75rem;color:var(--muted)}
+
+/* level path */
+.path{display:flex;flex-direction:column}
+.lv{display:grid;grid-template-columns:44px 1fr auto;gap:14px;align-items:center;padding:14px 0;border-bottom:1px solid var(--line);
+  background:none;border-left:0;border-right:0;border-top:0;text-align:left;width:100%}
+.lv:disabled{cursor:default}
+.lv .dot{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font-family:var(--mono);font-size:.85rem;border:1.5px solid var(--line);color:var(--muted)}
+.lv.next .dot{background:var(--felt);border-color:var(--felt);color:var(--bg)}
+.lv.done .dot{border-color:var(--felt);color:var(--felt)}
+.lv .t{display:flex;flex-direction:column;gap:1px}
+.lv .t b{font-weight:600}
+.lv .t small{color:var(--muted);font-size:.86rem;line-height:1.4}
+.lv.locked .t{opacity:.45}
+.lv:not(:disabled):hover .t b{color:var(--felt)}
+.stars{color:var(--gold);letter-spacing:2px;font-size:.95rem;white-space:nowrap}
+.stars .off{color:var(--line)}
+.tag{font-size:.75rem;color:var(--muted);border:1px solid var(--line);border-radius:99px;padding:2px 9px;white-space:nowrap}
+.lv.next .tag{color:var(--felt);border-color:var(--felt)}
+
+.tools{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.tool{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;text-align:left;display:flex;flex-direction:column;gap:2px}
+.tool b{font-weight:600}
+.tool small{color:var(--muted);font-size:.84rem}
+.tool:disabled{opacity:.5;cursor:default}
+.tool:not(:disabled):hover{border-color:var(--felt)}
+
+/* step player */
+.bar{display:flex;align-items:center;gap:12px;position:sticky;top:env(safe-area-inset-top, 0px);background:var(--bg);padding-block:8px;z-index:5}
+.bar .x{background:none;border:0;font-size:1.4rem;line-height:1;color:var(--muted);padding:4px 6px}
+.prog{flex:1;height:6px;background:var(--line);border-radius:99px;overflow:hidden}
+.prog i{display:block;height:100%;background:var(--felt);border-radius:99px;transition:width .3s}
+.bar .xp{font-family:var(--mono);font-size:.85rem;color:var(--muted)}
+.step{display:flex;flex-direction:column;gap:18px}
+.prose{display:flex;flex-direction:column;gap:12px;max-width:62ch}
+.prose ul{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:6px}
+.prose strong{font-weight:600}
+.note{border-left:3px solid var(--gold);padding:8px 14px;font-size:.92rem;color:var(--muted);background:var(--surface);border-radius:0 8px 8px 0}
+.note b{color:var(--ink)}
+.q{font-size:1.15rem;font-weight:500;line-height:1.45}
+.opts{display:flex;flex-direction:column;gap:8px}
+.opt{background:var(--surface);border:1.5px solid var(--line);border-radius:10px;padding:12px 14px;text-align:left;display:flex;gap:12px;align-items:center}
+.opt:not(:disabled):hover{border-color:var(--felt)}
+.opt .k{font-family:var(--mono);font-size:.75rem;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:0 6px}
+.opt.right{border-color:var(--felt);background:var(--felt-soft)}
+.opt.wrong{border-color:var(--suit);background:var(--suit-soft)}
+.opt:disabled{cursor:default}
+.btn{background:var(--ink);color:var(--bg);border:0;border-radius:10px;padding:13px 22px;font-weight:600;align-self:flex-start}
+.btn:disabled{opacity:.35;cursor:default}
+.btn.ghost{background:none;color:var(--ink);border:1.5px solid var(--line)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.fb{border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.fb.ok{background:var(--felt-soft)} .fb.bad{background:var(--suit-soft)} .fb.mid{background:var(--surface);border:1px solid var(--gold)}
+.fb h3{font-size:1rem}
+.fb.ok h3{color:var(--felt)} .fb.bad h3{color:var(--suit)} .fb.mid h3{color:var(--gold)}
+
+/* cards */
+.hand{display:inline-flex;gap:3px;vertical-align:-2px}
+.pc{display:inline-flex;align-items:center;gap:1px;background:var(--card-bg);color:var(--card-ink);border:1px solid var(--card-line);border-radius:5px;
+  padding:0 5px;font-family:var(--mono);font-size:.86em;font-weight:500;line-height:1.5}
+.pc.r{color:var(--card-red)}
+.scene{display:flex;flex-direction:column;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px}
+.scene .who{display:grid;grid-template-columns:64px 1fr;align-items:center;gap:10px}
+.scene .who span{font-size:.8rem;color:var(--muted)}
+.scene .pc{font-size:1.15rem;padding:3px 9px;border-radius:7px}
+
+/* terms */
+.term{background:none;border:0;padding:0;border-bottom:1.5px dotted var(--felt);color:inherit;font-weight:inherit}
+.pop{position:absolute;z-index:20;max-width:300px;background:var(--ink);color:var(--bg);border-radius:10px;padding:10px 13px;font-size:.88rem;line-height:1.45;box-shadow:0 6px 24px rgba(0,0,0,.18)}
+.pop b{display:block;margin-bottom:2px}
+
+/* viz */
+.viz{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px;overflow-x:auto}
+.viz .cap{font-size:.8rem;color:var(--muted)}
+.eqrow{display:flex;flex-direction:column;gap:5px}
+.eqrow .lbl{display:flex;justify-content:space-between;gap:8px;font-size:.9rem;flex-wrap:wrap}
+.eqbar{display:flex;height:12px;border-radius:99px;overflow:hidden;background:var(--line);position:relative}
+.eqbar i{display:block;height:100%}
+.eqbar .a{background:var(--felt)} .eqbar .b{background:var(--suit)} .eqbar .t{background:var(--line)}
+.guess{position:absolute;top:0;bottom:0;width:3px;background:var(--ink);border-radius:2px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.8rem;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+svg text{fill:var(--muted);font-family:var(--body);font-size:11px}
+svg .ink{fill:var(--ink)}
+.grid13{display:grid;grid-template-columns:repeat(13,minmax(22px,1fr));gap:2px;min-width:300px}
+.grid13 div{aspect-ratio:1;display:grid;place-items:center;font-family:var(--mono);font-size:clamp(7px,1.7vw,10px);border-radius:3px;background:var(--bg);color:var(--muted)}
+.grid13 .core{background:var(--felt);color:var(--bg)}
+.grid13 .some{background:var(--felt-soft);color:var(--felt);outline:1px dashed var(--felt)}
+.ranks{display:flex;flex-direction:column}
+.ranks div{display:grid;grid-template-columns:22px 140px 1fr;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:.9rem}
+.ranks div:last-child{border-bottom:0}
+.ranks small{color:var(--muted)}
+.slots{display:flex;gap:16px;flex-wrap:wrap}
+.slots .g{display:flex;flex-direction:column;gap:6px}
+.slots .g span{font-size:.75rem;color:var(--muted)}
+.slots .pc{font-size:1.05rem;padding:3px 8px}
+.slots .blank{display:inline-block;width:34px;height:30px;border:1.5px dashed var(--line);border-radius:6px}
+
+/* slider / input */
+.est{display:flex;flex-direction:column;gap:8px}
+.est .val{font-family:var(--mono);font-size:2rem}
+input[type=range]{width:100%;accent-color:var(--felt)}
+.numin{font-family:var(--mono);font-size:1.4rem;width:140px;padding:10px 12px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink)}
+.sortcard{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:22px;display:flex;flex-direction:column;align-items:center;gap:8px}
+.sortcard .pc{font-size:1.6rem;padding:6px 12px;border-radius:9px}
+.sortbtns{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.sortbtns .opt{justify-content:center;font-weight:600}
+
+/* results + sheet */
+.result{display:flex;flex-direction:column;gap:16px;align-items:flex-start}
+.big-stars{font-size:2.4rem;color:var(--gold);letter-spacing:6px}
+.big-stars .off{color:var(--line)}
+.facts{display:flex;flex-direction:column}
+.fact{display:grid;grid-template-columns:96px 1fr;gap:14px;padding:11px 0;border-bottom:1px solid var(--line);align-items:baseline}
+.fact .n{font-family:var(--mono);color:var(--felt);font-size:1.05rem}
+.fact.lockd{opacity:.4}
+.gloss{display:flex;flex-direction:column}
+.gloss div{padding:10px 0;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
+.gloss b{font-weight:600}
+.src{font-size:.82rem;color:var(--muted)}
+.back{background:none;border:0;color:var(--muted);padding:0;align-self:flex-start}
+.divider{padding:22px 0 6px;border-bottom:1px solid var(--line)}
+.code{width:100%;min-height:96px;font-family:var(--mono);font-size:.78rem;padding:10px 12px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);resize:vertical;word-break:break-all}
+.sync{display:flex;flex-direction:column;gap:10px}
+.msg{font-size:.88rem;min-height:1.4em}
+.msg.ok{color:var(--felt)} .msg.bad{color:var(--suit)}
+.credit{max-width:660px;margin:40px auto 0;padding-top:16px;border-top:1px solid var(--line);font-size:.85rem;color:var(--muted);text-align:center}
+.credit .heart{color:var(--suit)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chips .tag.hi{background:var(--felt);border-color:var(--felt);color:var(--bg)}
+.chips .arrow{color:var(--muted);font-size:.8rem}
+.combos{display:flex;flex-direction:column;gap:12px}
+.combos .g{display:flex;flex-direction:column;gap:6px}
+.combos .hands{display:flex;flex-wrap:wrap;gap:8px}
+.sqs{display:grid;grid-template-columns:repeat(20,1fr);gap:3px;max-width:420px}
+.sqs i{aspect-ratio:1;border-radius:2px;background:var(--felt)}
+.sqs i.l{background:var(--suit)}
+@media (max-width:480px){
+  h1{font-size:1.9rem}
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .ranks div{grid-template-columns:22px 1fr;}
+  .ranks div small{grid-column:2}
+  .fact{grid-template-columns:80px 1fr}
+}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important} }
+</style>
+
+<div id="app"></div>
+<footer class="credit">Made with <span class="heart">♥</span> by <a href="https://github.com/nityajain24" target="_blank" rel="noopener">nityajain24</a></footer>
+<div id="pop" class="pop" hidden></div>
+
+<script>
+/* ---------- glossary ---------- */
+const G={
+  hole:{w:'hole cards',d:'The two private cards only you can see.'},
+  board:{w:'board',d:'The shared cards dealt face up in the middle. Everyone uses them.'},
+  preflop:{w:'pre-flop',d:'The first betting round, after you get your two cards but before any shared cards appear.'},
+  flop:{w:'flop',d:'The first three shared cards, dealt together.'},
+  turn:{w:'turn',d:'The fourth shared card.'},
+  river:{w:'river',d:'The fifth and last shared card.'},
+  street:{w:'street',d:'One betting round. Pre-flop, flop, turn and river are the four streets.'},
+  pot:{w:'pot',d:'All the money bet so far in this hand. The winner takes it.'},
+  blinds:{w:'blinds',d:'Two forced bets put in before the cards are dealt, so there is always something to win. They rotate around the table.'},
+  bb:{w:'big blind (BB)',d:'The bigger of the two forced bets. Players measure stacks in big blinds: "100 BB" means 100 times the big blind.'},
+  stack:{w:'stack',d:'The chips you have in front of you.'},
+  fold:{w:'fold',d:'Give up the hand. You lose what you already put in, but nothing more.'},
+  check:{w:'check',d:'Pass without betting. Only allowed when nobody has bet yet this round.'},
+  call:{w:'call',d:'Match the current bet to stay in.'},
+  bet:{w:'bet',d:'Put money in when nobody has bet yet this round.'},
+  raise:{w:'raise',d:'Increase someone else\'s bet. They must match it or fold.'},
+  checkraise:{w:'check-raise',d:'Check first, wait for the opponent to bet, then raise them. A trap.'},
+  allin:{w:'all-in',d:'Bet every chip you have.'},
+  pair:{w:'pocket pair',d:'Your two private cards are the same rank, like 8 and 8.'},
+  set:{w:'set',d:'Three of a kind made with a pocket pair plus one matching card on the board. Very well hidden.'},
+  setmine:{w:'set-mining',d:'Playing a small pocket pair cheaply, hoping to hit a set and win a big pot. If you miss, you let it go.'},
+  overpair:{w:'overpair',d:'A pocket pair higher than the opponent\'s pair (or higher than every card on the board).'},
+  overcard:{w:'overcard',d:'A card higher than the opponent\'s pair or than the cards on the board.'},
+  toppair:{w:'top pair',d:'You paired the highest card on the board.'},
+  kicker:{w:'kicker',d:'Your side card. When two players have the same pair, the higher kicker wins.'},
+  suited:{w:'suited',d:'Both your cards are the same suit (e.g. both hearts). Gives you a chance at a flush.'},
+  offsuit:{w:'off-suit',d:'Your two cards are different suits.'},
+  connectors:{w:'suited connectors',d:'Two cards next to each other in rank and of the same suit, like 9 and 8 of spades. They can make straights and flushes.'},
+  broadway:{w:'Broadway',d:'The five highest ranks: A, K, Q, J, 10. "Broadway hands" are two of these, like K-Q.'},
+  nuts:{w:'nut flush',d:'The best possible flush. Usually the one with the ace.'},
+  draw:{w:'draw',d:'A hand that is not made yet but could become strong with the right card. For example four hearts, waiting for a fifth.'},
+  flushdraw:{w:'flush draw',d:'Four cards of one suit. One more of that suit gives you a flush.'},
+  oesd:{w:'open-ended straight draw',d:'Four cards in a row, like 6-7-8-9. Either end card (a 5 or a 10) completes the straight. 8 outs.'},
+  gutshot:{w:'gutshot',d:'A straight draw missing one card in the middle, like 7-8-_-10-J. Only one rank fills it. 4 outs.'},
+  backdoor:{w:'backdoor draw',d:'A draw that needs both the turn and the river to help you.'},
+  outs:{w:'outs',d:'The unseen cards that would give you the winning hand.'},
+  equity:{w:'equity',d:'Your share of the pot if the hand were played out many times. 60% equity = you win 6 times in 10.'},
+  favourite:{w:'favourite',d:'The hand more likely to win.'},
+  coinflip:{w:'coin flip',d:'A matchup close to 50/50.'},
+  dominated:{w:'dominated',d:'You share a card with the opponent but their other card is higher. You are a big underdog even though the hands look similar.'},
+  showdown:{w:'showdown',d:'When betting is over and remaining players turn their cards up to see who wins.'},
+  headsup:{w:'heads-up',d:'Only two players left in the hand.'},
+  multiway:{w:'multi-way',d:'Three or more players in the hand.'},
+  position:{w:'position',d:'Acting after your opponent. You see what they do before you decide. The button acts last after the flop.'},
+  button:{w:'button',d:'The dealer seat. It acts last after the flop, which is the best seat.'},
+  range:{w:'range',d:'All the hands an opponent could have in a spot, not just one guess.'},
+  value:{w:'value bet',d:'A bet made with a strong hand, hoping a worse hand calls.'},
+  bluff:{w:'bluff',d:'A bet with a weak hand, hoping a better hand folds.'},
+  semibluff:{w:'semi-bluff',d:'A bluff with a draw. You can win if they fold, and you can still win if they call and you hit.'},
+  protect:{w:'protection',d:'Betting a hand that is ahead so opponents with draws have to pay to see the next card.'},
+  potcontrol:{w:'pot control',d:'Checking with a medium-strength hand to keep the pot small.'},
+  potodds:{w:'pot odds',d:'The price of a call: what you pay, divided by the total pot after you call. If your chance of winning is higher, the call makes money in the long run.'},
+  implied:{w:'implied odds',d:'Extra money you expect to win on later streets if you hit your draw.'},
+  ev:{w:'expected value',d:'What a decision wins or loses on average, if you made it many times.'},
+  effective:{w:'effective stack',d:'The smaller of the two stacks. That is the most either player can win or lose in the hand.'},
+  spr:{w:'SPR',d:'Stack-to-pot ratio: the effective stack divided by the pot on the flop. Low SPR = you are close to all-in already.'},
+  station:{w:'calling station',d:'A player who calls almost everything and rarely folds.'},
+  rock:{w:'rock',d:'A very tight, careful player who only plays great hands and rarely bluffs.'},
+  maniac:{w:'maniac',d:'A player who plays nearly every hand and bets and raises wildly.'},
+  tag:{w:'TAG',d:'Tight-aggressive: plays few hands, but bets and raises with them.'},
+  lag:{w:'LAG',d:'Loose-aggressive: plays many hands and bets them hard.'},
+  passive:{w:'passive',d:'Tends to check and call rather than bet and raise.'},
+  aggressive:{w:'aggressive',d:'Tends to bet and raise rather than check and call.'},
+  vpip:{w:'VPIP',d:'"Voluntarily put money in pot": the % of hands a player chooses to play. High = loose.'},
+  pfr:{w:'PFR',d:'"Pre-flop raise": the % of hands a player raises before the flop. High = aggressive.'},
+  cbet:{w:'c-bet',d:'Continuation bet: the player who raised before the flop bets again on the flop, whatever came.'},
+  cash:{w:'cash game',d:'Chips are real money, blinds never change, and you can leave any time.'},
+  tourney:{w:'tournament',d:'Everyone buys in once. Blinds keep rising until one player has all the chips.'},
+  isolate:{w:'isolate',d:'Raise big enough that only one opponent stays in.'},
+  cracked:{w:'cracked',d:'A strong hand like aces losing to a weaker one.'},
+  capped:{w:'capped range',d:'An opponent whose actions show they probably don\'t have the very strongest hands.'},
+  slowplay:{w:'slow-play',d:'Play a monster hand weakly (check or call) to trap the opponent.'},
+  bluffcatcher:{w:'bluff catcher',d:'A medium hand that only beats bluffs. You call with it to catch someone bluffing.'},
+  scoop:{w:'scoop',d:'Win the whole pot.'},
+  utg:{w:'under the gun (UTG)',d:'The first seat to act before the flop, just left of the big blind. The hardest seat to play from.'},
+  cutoff:{w:'cutoff',d:'The seat just to the right of the button. Second-best seat at the table.'},
+  sb:{w:'small blind',d:'The smaller forced bet, posted by the seat just left of the button.'},
+  inpos:{w:'in position',d:'You act after your opponent on every street after the flop. "Out of position" is the opposite.'},
+  combo:{w:'combo',d:'One specific way to be dealt a hand. A♠K♥ and A♦K♣ are two different combos of A-K.'},
+  blocker:{w:'blocker',d:'A card you can see (in your hand or on the board) that makes some of the opponent\'s hands impossible or less likely.'},
+  variance:{w:'variance',d:'The short-term swings caused by luck. Good decisions can lose for a long time, and bad ones can win.'},
+  tilt:{w:'tilt',d:'Playing worse because you are upset, usually after losing a big pot.'},
+  bankroll:{w:'bankroll',d:'The money you set aside only for poker, separate from money you need.'},
+  buyin:{w:'buy-in',d:'The amount you sit down with in one game, or the entry fee for a tournament.'},
+};
+
+/* ---------- content ---------- */
+const POSTS={
+  primer:{t:'Primer (the blog assumes you know this)',u:''},
+  pre:{t:'Pre-Flop Poker Math',u:'https://pokertheoryblog.substack.com/p/pre-flop-poker-math-know-your-odds'},
+  hands:{t:'Are You Playing Math-Optimal Hands?',u:'https://pokertheoryblog.substack.com/p/are-you-playing-math-optimal-hands'},
+  flush:{t:'Math-Optimal Flush Draw Strategy',u:'https://pokertheoryblog.substack.com/p/math-optimal-flush-draw-strategy'},
+  bet:{t:'Math-Optimal Reasons to Bet or Check',u:'https://pokertheoryblog.substack.com/p/math-optimal-reasons-to-bet-or-check'},
+  cheat:{t:'Poker Math & Strategy Cheat Sheet',u:'https://pokertheoryblog.substack.com/p/your-ultimate-poker-math-and-strategy'},
+  beyond:{t:'Beyond the blog (general poker knowledge)',u:''},
+};
+
+const LEVELS=[
+{id:'table',title:'The table',sub:'How a hand works, in two minutes',src:['primer'],
+facts:[['5 cards','shared: flop (3), turn (1), river (1)'],['BB','stacks are counted in big blinds']],
+steps:[
+{t:'learn',h:'Texas Hold\'em in one minute',body:`<p>Everyone gets two private cards, their {{hole}}. Then five shared cards are dealt face up in the middle, called the {{board}}. You make the best five-card hand from any of your seven cards.</p><p>There is a betting round before any shared cards ({{preflop}}), then one after each new batch of shared cards: the {{flop}}, the {{turn}}, and the {{river}}.</p>`,viz:'streets'},
+{t:'learn',h:'Money words',body:`<p>The {{pot}} is the money in the middle. Before cards are dealt, two players post forced bets, the {{blinds}}. The bigger one is the {{bb}}, and serious players count everything in it: "I have 100 BB" means a {{stack}} worth 100 big blinds.</p><p>On your turn you can {{fold}}, {{check}}, {{call}}, {{bet}} or {{raise}}. Tap any underlined word, anywhere, to see what it means.</p>`},
+{t:'learn',h:'Which hand beats which',body:`<p>Top beats bottom. You will mostly meet the bottom half of this list.</p>`,viz:'ranks'},
+{t:'mcq',q:'You have a flush. Your opponent has a straight. Who wins?',opts:['You (flush)','Opponent (straight)','Split pot'],a:0,why:'A flush ranks above a straight.'},
+{t:'mcq',q:'Right after the flop, how many shared cards are face up?',opts:['2','3','4','5'],a:1,why:'The flop is three cards dealt together. The turn adds a fourth, the river a fifth.'},
+{t:'mcq',q:'Two pair against three of a kind. Who wins?',opts:['Two pair','Three of a kind'],a:1,why:'Three of a kind is one step above two pair.'},
+{t:'mcq',q:'The big blind is 2 chips and you have 200 chips. How deep are you?',opts:['20 BB','100 BB','200 BB'],a:1,why:'200 ÷ 2 = 100 big blinds.'},
+]},
+
+{id:'race',title:'Who\'s ahead before the flop',sub:'Pairs, high cards, and coin flips',src:['pre'],
+facts:[['81 / 19','higher pair vs lower pair'],['55 / 45','pair vs two higher cards (a coin flip)'],['85 / 15','pair vs two lower cards']],
+steps:[
+{t:'learn',h:'The math starts before any shared card',body:`<p>Before the flop, nobody knows what will come. But if you dealt the five shared cards out thousands of times, one hand would win more often. That share is called {{equity}}.</p><p>Green is the first hand, red the second, grey is a tie.</p>`,viz:'eq:pre'},
+{t:'learn',h:'Three patterns to remember',body:`<ul><li><strong>Higher pair vs lower pair:</strong> about 4 to 1. The lower pair mostly needs a third matching card.</li><li><strong>Pair vs two lower cards:</strong> the pair is a big {{favourite}}, around 85%.</li><li><strong>Pair vs two higher cards ({{overcard|overcards}}):</strong> close to a {{coinflip}}, about 55/45. Either high card pairing beats you.</li></ul><p>A 10-point edge sounds small. The casino's edge in roulette is under 3%, and casinos are very rich.</p>`,note:`<b>Correction.</b> The blog lists K♠K♥ vs A♠10♥ as "71% vs 19%". Those don't add up. A simulation gives about 71% vs 29%.`},
+{t:'est',q:'How often does your pair of queens win against a pair of eights?',you:'Qs Qd',them:'8d 8s',eq:[81,18.5],why:'Higher pair vs lower pair: about 81%. The eights mostly need a third 8 to appear.'},
+{t:'mcq',q:'Which matchup is better for the kings?',scene:{you:'Ks Kh'},opts:['[Ks Kh] vs [Js Th]','[Ks Kh] vs [As Th]','They are about the same'],a:0,why:'Against J-10 the kings win ~85%. Against A-10 only ~71%, because the ace is higher than a king and can pair.'},
+{t:'est',q:'Small pair vs ace-ten. How often do the nines win?',you:'9s 9h',them:'As Th',eq:[55,44.5],why:'Pair vs two overcards is a coin flip, slightly in the pair\'s favour: about 55%.'},
+{t:'est',q:'Two big cards vs two smaller ones. How often does A-K win?',you:'As Kh',them:'Qs Th',eq:[64,35],why:'About 64%. The bigger cards are ahead, but the smaller cards still win about a third of the time.'},
+{t:'mcq',q:'Same ace and same small card, but one hand is suited. What happens most of the time?',scene:{you:'As 2s',them:'Ad 2h'},opts:['Suited hand wins','Off-suit hand wins','They tie and split the pot'],a:2,why:'They tie about 91% of the time. The suited hand wins ~7% (by making a flush), the other ~2%.'},
+]},
+
+{id:'dom',title:'Domination',sub:'When your side card decides everything',src:['pre','cheat'],
+facts:[['23 / 71','A-2 vs A-Q: same ace, worse kicker'],['88 / 9','10-10 vs 10-8: total domination'],['~72%','A-K vs A-Q']],
+steps:[
+{t:'learn',h:'Hands that look close but aren\'t',body:`<p>When you and your opponent share a card, the other card, your {{kicker}}, decides the winner. If theirs is higher, you are {{dominated}}.</p><p>The trap: when an ace hits the board you feel great, and you lose a big pot to the better ace.</p>`,viz:'eq:dom'},
+{t:'est',q:'You both have an ace. Yours comes with a 2, theirs with a queen. How often do you win?',you:'As 2h',them:'Ah Qs',eq:[23,71],why:'About 23%. You mostly need the 2 to pair. That is why the blog avoids hands like A-2 off-suit.'},
+{t:'mcq',q:'You hold [As 7c] and an opponent raised a lot. Which of their hands dominates you?',opts:['[Ah Kd]','[Kc Qd]','[9s 8s]'],a:0,why:'A-K shares your ace and has a better kicker. K-Q and 9-8 are not dominating you; they are actually behind.'},
+{t:'est',q:'Pair of tens vs ten-eight. How often do the tens win?',you:'Ts Th',them:'Td 8s',eq:[88,9],why:'About 88%. The opponent\'s 10 is mostly dead, and their 8 is lower than your pair.'},
+{t:'mcq',q:'Why does 10-A do better against 10-10 than 10-8 does?',scene:{you:'Ts Th',them:'Td As'},opts:['The ace is higher than your pair, so pairing it wins','A-10 is suited','It doesn\'t; they are the same'],a:0,why:'The ace is an overcard. Pairing it beats tens, which gives A-10 about 30% instead of 9%.'},
+{t:'mcq',q:'Why do small off-suit aces (like A-7, A-8) lose money?',opts:['They rarely make a pair','When an ace comes, a better ace often takes a big pot','They can\'t make straights'],a:1,why:'You are happy when you pair your ace, but players who put in lots of money often have a better kicker.'},
+{t:'learn',h:'One more correction',body:`<p>The cheat sheet says A-K vs A-Q wins "~67%". Simulated, it's about 72% (with ~5% ties). Same lesson either way: a better kicker is a big edge.</p>`},
+]},
+
+{id:'hands',title:'Choosing your hands',sub:'What to play in a 6-player game',src:['hands','cheat'],
+facts:[['~1 in 8','a small pair flops a set (11.8%)'],['6.5%','two suited cards make a flush by the river'],['~1 in 5','hands in the blog\'s starting list'],['Fold','small off-suit aces (A-7, A-8)']],
+steps:[
+{t:'learn',h:'Your starting lineup',body:`<p>The blog's list for a 6-player {{cash}} game with 100 BB stacks. Each square is one kind of starting hand: pairs on the diagonal, {{suited}} hands above it, {{offsuit}} below.</p>`,viz:'range'},
+{t:'learn',h:'Why each group earns its place',body:`<ul><li><strong>Every pair.</strong> A small pair flops a {{set}} only 11.8% of the time. But when it does, it's hidden and wins huge pots. Example: [5s 5d] vs [Ac Kc] on [Ah 5c 3d]. They think top pair is great.</li><li><strong>Every suited ace.</strong> Played for the {{nuts}}, not for one pair. Great in {{multiway}} pots.</li><li><strong>Big aces, down to A-10.</strong> They dominate the weaker aces others play.</li><li><strong>{{broadway|Broadway}} hands</strong> (K-Q, K-J, Q-J…). Strong {{toppair|top pairs}} plus straight chances.</li><li><strong>{{connectors|Suited connectors}}</strong> down to 8-7. Sneaky straights and flushes; best with {{position}} and deep stacks.</li></ul>`},
+{t:'learn',h:'More players, fewer hands',body:`<p>With more players at the table, someone is more likely to hold a monster, so play fewer hands. With fewer players, the {{blinds}} come around faster and folding too much bleeds chips, so play more.</p><p>Big pairs: raise hard. Aces win ~86% {{headsup|heads-up}} against K-J, but they get {{cracked}} far more often when many players see the flop. Raise to {{isolate}} one opponent.</p>`,note:`<b>Correction.</b> The cheat sheet says aces win "~82%" vs K-J. It's about 86%.`},
+{t:'sort',q:'Play or fold? 6-player cash game, 100 BB deep.',choices:['Play','Fold'],items:[
+ {h:'5s 5d',a:0,why:'Every pair is playable. You\'re hoping to flop a set.'},
+ {h:'Ah 5h',a:0,why:'Suited ace: nut-flush potential.'},
+ {h:'As 7c',a:1,why:'Off-suit small ace. Gets dominated by better aces.'},
+ {h:'Kd Qc',a:0,why:'Broadway hand. Strong top pairs and straights.'},
+ {h:'9s 8s',a:0,why:'Suited connector, inside the blog\'s list (down to 8-7).'},
+ {h:'7d 2c',a:1,why:'Low, unconnected, off-suit. The worst kind of hand.'},
+ {h:'Ac Jd',a:0,why:'Big ace, above the A-10 cut-off.'},
+ {h:'6h 4c',a:1,why:'Low off-suit cards. Rarely win big pots; often lose to bigger straights.'},
+ {h:'Qs Js',a:0,why:'Broadway and suited.'},
+ {h:'Ad 8h',a:1,why:'Small off-suit ace: a "money burner".'},
+ {h:'3c 3h',a:0,why:'Every pair, including threes.'},
+ {h:'Kh 4c',a:1,why:'Not on the list. K-4 off-suit is weak and dominated by better kings.'},
+]},
+{t:'mcq',q:'How often does a small pocket pair flop a set?',opts:['About 1 in 3','About 1 in 8','About 1 in 25'],a:1,why:'11.8%, roughly once every 8–9 flops.'},
+{t:'mcq',q:'Then why play small pairs at all?',opts:['They win most hands','When they hit, they win very big pots','They are good for bluffing'],a:1,why:'Rare but huge wins. That only works when stacks are deep enough to get paid.'},
+{t:'mcq',q:'The game grows from 6 players to 9. What should you do?',opts:['Play more hands','Play fewer hands','No change'],a:1,why:'More players means someone is more likely to have a strong hand. Tighten up.'},
+]},
+
+{id:'stacks',title:'Stacks and blinds',sub:'Deep, short, and the stack that really counts',src:['hands','bet'],
+facts:[['100+ BB','deep: draws and tricky plays gain value'],['< 10 BB','short: play hands that win now'],['min(stacks)','the effective stack is all you can win']],
+steps:[
+{t:'learn',h:'Measure everything in big blinds',body:`<p>A $200 stack means different things in a $1 game and a $10 game. So players talk in {{bb|big blinds}}.</p>`,viz:'stacks'},
+{t:'learn',h:'Short stacks change the game',body:`<p>With under 10 BB you can't chase {{draw|draws}}. Example: you have 10 BB, raise to 3, and the opponent bets 4 on the flop. If you call to chase, you hit about 35% of the time and lose most of your stack the other 65%. Even when you hit, there's little left to win.</p><p>Short? Play big pairs and strong aces. Hands that can win now or double you up.</p>`},
+{t:'learn',h:'Why blinds make you loosen up',body:`<p>Imagine poker with no blinds. Folding would cost nothing, so you'd wait for aces and go {{allin|all-in}}.</p><p>Blinds make every fold cost something. In a {{cash}} game, blinds stay small next to deep stacks, so patience works. In a {{tourney|tournament}} the blinds keep rising, and waiting too long gets expensive.</p>`},
+{t:'learn',h:'The effective stack',body:`<p>You have $500. Your opponent has $200. You're not playing for $500; you're playing for $200. That smaller number is the {{effective}}. Plan bets and bluffs around it. You can't win more than they can pay.</p>`},
+{t:'mcq',q:'You have $500, your opponent has $200. What\'s the most you can win from them this hand?',opts:['$200','$500','$700'],a:0,why:'They can only put in $200. That\'s the effective stack.'},
+{t:'mcq',q:'You have 8 BB. Which hand do you want?',opts:['[8s 7s]','[Ac Qd]','[5h 4h]'],a:1,why:'Short stack: you want a hand that wins without improving. Suited connectors need deep stacks to pay off.'},
+{t:'mcq',q:'In a tournament the blinds keep doubling. You should…',opts:['Get tighter and wait','Loosen up and play more hands','Never change'],a:1,why:'Every orbit of folding costs more. Waiting becomes the expensive choice.'},
+{t:'mcq',q:'Deep stacks (100+ BB) make which hands more valuable?',opts:['Drawing hands like suited connectors','Small off-suit aces','No hand changes'],a:0,why:'When you hit a straight or flush there\'s a lot left to win, which pays for all the times you miss.'},
+]},
+
+{id:'outs',title:'Outs and the 2-4 rule',sub:'Your chance to hit, in your head',src:['cheat'],
+facts:[['outs × 4','chance by the river, counted on the flop'],['outs × 2','chance on the river, counted on the turn'],['9 · 8 · 4','outs: flush draw · open straight draw · gutshot']],
+steps:[
+{t:'learn',h:'Outs',body:`<p>{{outs|Outs}} are the unseen cards that would give you the winning hand.</p><p>You hold [9s Ts]. The flop is [As 2s Kd]. You see four spades. There are 13 in the deck, so 9 spades are still out there. That's 9 outs to a flush.</p>`},
+{t:'learn',h:'The 2-4 rule',body:`<ul><li><strong>On the flop</strong> (two cards to come): outs × 4 ≈ your chance by the river.</li><li><strong>On the turn</strong> (one card to come): outs × 2 ≈ your chance on the river.</li></ul><p>9 outs on the flop → about 36%. On the turn → about 18%.</p><p>The chart shows the rule (light) against the exact chance (green). It runs a bit high once you have more than about 8 outs.</p>`,viz:'outs'},
+{t:'learn',h:'Common draws',body:`<ul><li>{{flushdraw|Flush draw}}: 9 outs, ~35% by the river.</li><li>{{oesd|Open-ended straight draw}}: 8 outs, ~32%.</li><li>{{gutshot|Gutshot}}: 4 outs, ~16%.</li><li>Two {{overcard|overcards}} (e.g. A-K on a low board): 6 outs, ~24%.</li></ul>`},
+{t:'num',q:'You hold [9s Ts]. Flop: [As 2s Kd]. How many outs to a flush?',ans:9,tol:0,why:'13 spades minus the 4 you can see = 9.'},
+{t:'num',q:'Same hand, still on the flop. Using the 2-4 rule, what\'s your % to make it by the river?',ans:36,tol:2,unit:'%',why:'9 × 4 = 36%. (Exact: 35%.)'},
+{t:'num',q:'Turn: [As 2s Kd 5c]. One card to come. Your % now?',ans:18,tol:2,unit:'%',why:'9 × 2 = 18%. (Exact: 19.6%.)'},
+{t:'num',q:'You hold [As Kd]. Flop: [Jc 2s Td]. Count your outs to a straight or top pair.',ans:10,tol:0,why:'4 queens make a straight. 3 aces + 3 kings make top pair. 4 + 6 = 10 outs, about 40% by the rule (38% exact). That is why A-K is a good semi-bluff here.'},
+{t:'mcq',q:'You hold [8h 9c]. Flop: [7s 6d 2c]. How many outs to a straight?',opts:['4','8','9'],a:1,why:'Open-ended: any 5 or any 10. 4 + 4 = 8.'},
+{t:'mcq',q:'You hold [9h 8c]. Flop: [Js 7d 2c]. How many outs to a straight?',opts:['4','8','12'],a:0,why:'A gutshot: only a 10 fills 7-8-9-10-J. 4 tens = 4 outs.'},
+]},
+
+{id:'potodds',title:'Pot odds',sub:'When calling is right even if you\'re behind',src:['flush','cheat'],
+facts:[['call ÷ final pot','the % you need to win to break even'],['1 in 7','calling 20 into a pot that ends at 140'],['Call','if your chance > the price']],
+steps:[
+{t:'learn',h:'What a call costs',body:`<p>{{potodds|Pot odds}} compare what you pay with what you can win.</p><p><strong>Price = your call ÷ the total pot after you call.</strong></p><p>The pot is $100 and someone bets $20. You call $20 to win a pot of $140, so you need to win 20 ÷ 140 ≈ 14%, about 1 time in 7. A flush draw hits about 1 time in 3. Folding would be a big mistake.</p>`,viz:'potodds'},
+{t:'learn',h:'A worked example',body:`<p>You hold [As Js]. Flop: [7s 2s Kd]. The pot is 6 BB and your opponent bets 4 BB.</p><ul><li>Pot after their bet: 6 + 4 = 10 BB.</li><li>After your call: 10 + 4 = 14 BB.</li><li>Price: 4 ÷ 14 ≈ 28%.</li><li>Your outs: 9 spades + 3 aces = 12. 12 × 4 = 48%.</li></ul><p>48% is far above 28%. Call (or even raise). The blog's rule: <strong>never fold a flush draw on the flop to a small bet.</strong></p><p>And when you hit, you often win more on later streets. Those are your {{implied}}.</p>`},
+{t:'num',q:'Pot is $100. Opponent bets $50. What % do you need to win to call?',ans:25,tol:1,unit:'%',why:'Call 50. Final pot 100 + 50 + 50 = 200. 50 ÷ 200 = 25%.'},
+{t:'num',q:'Pot is 10 BB. Opponent bets 10 BB (a pot-sized bet). What % do you need?',ans:33,tol:1,unit:'%',why:'Call 10. Final pot 10 + 10 + 10 = 30. 10 ÷ 30 ≈ 33%.'},
+{t:'mcq',q:'Flop, you have a flush draw (~35%). Pot $60, opponent bets $60. Call or fold?',opts:['Call','Fold'],a:0,why:'You need 60 ÷ 180 = 33%. 35% is a bit more, so calling is right even before counting what you win later.'},
+{t:'mcq',q:'Turn, you have a gutshot (4 outs, ~8% on the river). Pot $100, bet $50. Call or fold?',opts:['Call','Fold'],a:1,why:'You need 25% but have about 8%. Fold.'},
+{t:'mcq',q:'What are implied odds?',opts:['The chance you hit your draw','Money you expect to win after you hit','The size of the blinds'],a:1,why:'Implied odds are the future payday. They\'re why deep stacks make draws profitable.'},
+]},
+
+{id:'flush',title:'Flush draws',sub:'Numbers to know, and how to play them',src:['flush','cheat'],
+facts:[['11%','two suited cards flop a flush draw'],['0.84%','two suited cards flop a full flush'],['35% / ~20%','flush draw hits by river / on the turn alone'],['4%','backdoor flush (needs turn and river)']],
+steps:[
+{t:'learn',h:'Know these by heart',body:`<p>The blog asks you to memorise these.</p>`,viz:'flushnums'},
+{t:'learn',h:'Why play a hand that usually misses?',body:`<p>A flush draw misses about 65% of the time. It still makes money because you lose small when you miss and win big when you hit. A pot 5–10× your usual loss more than pays for the misses.</p><p>That needs deep stacks. At 10 BB each there's nothing left to win when you hit. At 100+ BB, draws shine.</p>`},
+{t:'learn',h:'Most players miss the flop',body:`<p>Any random hand completely misses the flop about 2 times in 3 (the blog says 67–68%). {{aggressive|Aggressive}} players know this, so they bet a lot when they have nothing.</p><p>With a flush draw, the way to play depends on the opponent:</p><ul><li><strong>{{passive|Passive}} player checks to you:</strong> bet. They may fold now; if not, you learn something and build the pot for when you hit.</li><li><strong>Aggressive player bets:</strong> sometimes raise. They often have nothing and fold. If they call, their hand is narrower.</li><li><strong>{{station|Calling station}}:</strong> don't bluff. Draw cheaply, then bet big when you hit.</li></ul><p><strong>Missed on the turn?</strong> If they check, a big bet (~75% of the pot) can push a scared player off a middle pair. If they keep betting, they're likely strong: go back to pot odds.</p>`},
+{t:'mcq',q:'You hold the ace-high flush draw on the button. A passive player checks to you.',scene:{you:'Ah Th',board:'8h 5h Kc'},opts:['Bet','Check behind','Fold'],a:0,why:'They showed weakness. Betting can win now and builds a pot for when the flush comes.'},
+{t:'mcq',q:'Same hand, but an aggressive player bets into you.',scene:{you:'Ah Th',board:'8h 5h Kc'},opts:['Fold','Sometimes raise','Always go all-in'],a:1,why:'Aggressive players bet a lot of air. A raise can win now, and your draw is still live if called.'},
+{t:'mcq',q:'Same draw, against a player who calls everything.',opts:['Bluff big','Check and call cheaply; bet big when you hit','Fold'],a:1,why:'Bluffs don\'t work on players who never fold. Get paid when you make it.'},
+{t:'mcq',q:'Both players have 10 BB. You have a flush draw and face a big bet. Chase it?',opts:['Yes, always chase flushes','No, there\'s too little left to win when you hit'],a:1,why:'Draws need deep stacks. Short, you only get the pot odds, and here those aren\'t enough.'},
+{t:'mcq',q:'A flush draw on the flop completes by the river about…',opts:['20%','35%','50%'],a:1,why:'About 35%. About 19–20% on the turn alone.'},
+{t:'mcq',q:'Why does raising an aggressive player with a draw work?',opts:['They bet a lot when they missed, so they fold often','They never fold','Draws always win'],a:0,why:'Most players miss most flops. Aggressive ones bet anyway, so a raise often takes the pot.'},
+]},
+
+{id:'bet',title:'Why bet, and how much',sub:'Four reasons, and the math of a bluff',src:['bet','cheat'],
+facts:[['bet ÷ (pot+bet)','how often a bluff must work'],['25 · 33 · 50%','⅓-pot · ½-pot · pot-sized bluffs'],['4 reasons','value · bluff · semi-bluff · protection']],
+steps:[
+{t:'learn',h:'The four reasons to bet',body:`<ul><li><strong>{{value|Value}}:</strong> you're ahead and a worse hand will call. [As Qs] on [Qd 9h 4c] vs [Qc Jc]: you win ~79%.</li><li><strong>{{bluff|Bluff}}:</strong> you're behind, but a better hand might fold.</li><li><strong>{{semibluff|Semi-bluff}}:</strong> you're behind but drawing. They might fold now, and if they call you can still hit (~35% with a flush draw).</li><li><strong>{{protect|Protection}}:</strong> you're ahead, but a draw could pass you. [Ks Kh] on [9c 7s 2c 5s] vs [Ac Tc]: 9 clubs + 3 aces = 12 outs ≈ 24%. Make them pay to see the river.</li></ul>`},
+{t:'learn',h:'How often a bluff must work',body:`<p>A bluff risks your bet to win the pot. It breaks even when they fold <strong>bet ÷ (pot + bet)</strong> of the time.</p>`,viz:'bluff',note:`<b>A caution.</b> The blog says small bets against passive beginners "win 68% of the time" because that's how often people miss the flop. That only holds if they fold every time they miss. Real players sometimes call with nothing, or with a draw. It's still a strong spot, just not a sure one.`},
+{t:'learn',h:'Bet bigger against callers',body:`<p>A {{station}} continues against a flop bet 70%+ of the time. Don't bluff them. When you have a strong hand, bet bigger: they look at their pair and call.</p>`},
+{t:'mcq',q:'Why bet here?',scene:{you:'As Qs',them:'Qc Jc',board:'Qd 9h 4c'},opts:['Value','Bluff','Semi-bluff','Protection'],a:0,why:'You\'re ahead (~79%) and Q-J will call. Classic value.'},
+{t:'mcq',q:'You have four hearts after the flop and nothing else. You bet. That\'s a…',opts:['Value bet','Pure bluff','Semi-bluff','Protection bet'],a:2,why:'Behind now, but with a real chance to improve. Two ways to win.'},
+{t:'mcq',q:'Why bet here?',scene:{you:'Ks Kh',them:'Ac Tc',board:'9c 7s 2c 5s'},opts:['Value only','Protection','Bluff'],a:1,why:'You\'re ahead, but 12 outs give them ~24% (exact 27%). Betting makes them pay to chase.'},
+{t:'num',q:'You bluff half the pot. What % of the time must they fold to break even?',ans:33,tol:1,unit:'%',why:'Bet 1 to win 2: 1 ÷ (2 + 1) = 33%.'},
+{t:'num',q:'You bluff the full pot. Break-even fold %?',ans:50,tol:1,unit:'%',why:'1 ÷ (1 + 1) = 50%.'},
+{t:'mcq',q:'You have a strong hand against a calling station. Your bet size should be…',opts:['Smaller than usual','Bigger than usual','Zero; check it down'],a:1,why:'They call too much. Charge them more for it.'},
+]},
+
+{id:'check',title:'Why check',sub:'Pot control, cheap cards, and the check-raise',src:['bet'],
+facts:[['Check','top pair, weak kicker → keep the pot small'],['Check-raise','strong draw or monster vs aggressive players'],['SPR','stack ÷ pot: low = simple, high = flexible']],
+steps:[
+{t:'learn',h:'Checking is a weapon',body:`<ul><li><strong>{{potcontrol|Pot control}}:</strong> top pair with a weak kicker. Check to keep the pot small, and thinking players may call your later bets more lightly.</li><li><strong>Draw vs a calling station:</strong> they never fold, so a bluff is wasted. Check, see the next card cheap, bet big if you hit.</li><li><strong>{{checkraise|Check-raise}} an aggressive player:</strong> with a strong draw or a monster. They bet a lot because most players miss, and a raise often makes them fold. <em>Not</em> against a {{maniac}}: they'll re-bluff and shove over you.</li></ul>`},
+{t:'learn',h:'Stack-to-pot ratio',body:`<p>{{spr|SPR}} = effective stack ÷ pot on the flop.</p><ul><li><strong>Shallow (20–40 BB), low SPR:</strong> little room to bluff, top pair is strong, get value fast.</li><li><strong>Deep (100+ BB), high SPR:</strong> room for tricky plays, draws gain value, bets across several streets.</li></ul>`},
+{t:'mcq',q:'You have top pair with a weak kicker against a thinking player. Default play?',opts:['Bet huge','Check to control the pot','Fold'],a:1,why:'A medium hand doesn\'t want a huge pot.'},
+{t:'mcq',q:'You have a flush draw against someone who never folds.',opts:['Bluff','Check and take the cheap card'],a:1,why:'No fold equity means no reason to bluff.'},
+{t:'mcq',q:'You flop a monster. Your opponent bets nearly every flop. Best plan?',opts:['Check-raise','Lead out small','Fold'],a:0,why:'Let them bet, then raise. Their frequent bets do the work for you.'},
+{t:'mcq',q:'Check-raise bluff against a maniac?',opts:['Great idea','Bad idea'],a:1,why:'Maniacs don\'t fold and will re-raise. Save the check-raise bluff for aggressive but sane players.'},
+{t:'num',q:'Effective stack 300, pot on the flop 100. What\'s the SPR?',ans:3,tol:0,why:'300 ÷ 100 = 3. Low: decisions get simple, and top pair is often good enough to commit.'},
+{t:'mcq',q:'Stacks are 30 BB and you flop top pair. The blog\'s advice?',opts:['Slow down and trap','Get value fast','Fold'],a:1,why:'Shallow stacks: top pair is strong and there\'s little room for tricks.'},
+]},
+
+{id:'reads',title:'Reading opponents',sub:'Five player types and how to beat each',src:['cheat','bet'],
+facts:[['Rock','steal their blinds, fold to their strength'],['Station','never bluff, value-bet relentlessly'],['Maniac','let them bluff, call lighter'],['TAG / LAG','bluff when capped · trap the LAG']],
+steps:[
+{t:'learn',h:'Two numbers describe a player',body:`<p>{{vpip|VPIP}}: what % of hands they choose to play. {{pfr|PFR}}: what % they raise before the flop. High VPIP = loose, plays a lot. PFR close to VPIP = {{aggressive}}, raises instead of calling.</p>`,viz:'players'},
+{t:'learn',h:'How to beat each one',body:`<ul><li><strong>{{rock|Rock}}</strong> (~10% VPIP, ~5% PFR): steal their blinds, {{cbet|c-bet}} often, fold when they show strength.</li><li><strong>{{station|Calling station}}</strong> (35–60%, rarely folds): never bluff. Bet for value again and again. Even second pair often gets paid.</li><li><strong>{{maniac|Maniac}}</strong> (40–100%): {{slowplay|slow-play}} monsters, let them bluff, call with weaker hands, rarely bluff yourself.</li><li><strong>{{tag|TAG}}</strong> (15–20% / 12–18%): bluff when their range is {{capped}}, get value when ahead.</li><li><strong>{{lag|LAG}}</strong> (25–40%, high aggression): trap with strong hands, call lighter when they overextend.</li></ul>`},
+{t:'mcq',q:'VPIP 10%, PFR 5%. Rarely bluffs. Who is this?',opts:['Rock','Calling station','Maniac','LAG'],a:0,why:'Very few hands, rarely aggressive: the rock.'},
+{t:'mcq',q:'The rock suddenly raises big on the turn. You have one pair.',opts:['Re-raise','Fold','Call down'],a:1,why:'Rocks rarely bluff. When they show strength, believe them.'},
+{t:'mcq',q:'VPIP 50%, almost never raises, calls everything. Your plan?',opts:['Bluff a lot','Value-bet relentlessly, never bluff','Play tricky'],a:1,why:'That\'s a calling station. Bluffs fail; thin value wins.'},
+{t:'mcq',q:'VPIP 80%, bets and raises constantly. You flop a monster.',opts:['Bet big now','Check and let them bluff into you','Fold'],a:1,why:'Against a maniac, slow-play: they will put the money in for you.'},
+{t:'mcq',q:'VPIP 18%, PFR 15%. Who is this?',opts:['TAG','Rock','Calling station','Maniac'],a:0,why:'Selective but aggressive when in: tight-aggressive.'},
+{t:'mcq',q:'VPIP 32%, very aggressive. You have a strong hand.',opts:['Trap them','Bluff them','Fold'],a:0,why:'LAGs overextend. Let them bet into your strength.'},
+]},
+
+{id:'combo',title:'Big draws, big spots',sub:'When a "losing" hand is the favourite',src:['cheat'],
+facts:[['56%','Q♥10♥ vs A-A on 9♥7♥J♠'],['~50%','pair + flush draw vs top pair'],['53%','two overcards + flush draw vs a pair']],
+steps:[
+{t:'learn',h:'Combined draws can be favourites',body:`<p>Sometimes your hand isn't best right now, but your outs add up so much you're ahead anyway. The blog loves these spots: {{semibluff|semi-bluff}} or {{checkraise|check-raise}} with them.</p>`,viz:'eq:combo'},
+{t:'est',q:'Flop: [9h 7h Js]. You have a straight draw plus a flush draw. They have aces. How often do you win?',you:'Qh Th',them:'Ac Ad',board:'9h 7h Js',eq:[56,44],why:'About 56%. You\'re the favourite against aces!'},
+{t:'est',q:'Flop: [As 9d 2s]. You have a pair of nines plus a flush draw. They have top pair, top kicker.',you:'7s 9s',them:'Kc Ac',board:'As 9d 2s',eq:[49.5,50.5],why:'About 50/50. Many players assume top pair is way ahead.'},
+{t:'est',q:'Flop: [8c Td 6c]. Two overcards plus a flush draw vs a pair of tens.',you:'Ac Kc',them:'Jd Ts',board:'8c Td 6c',eq:[53,47],why:'About 53%: flush, aces and kings all win for you.'},
+{t:'est',q:'Flop: [Qd 9h 4c]. You have top pair, ace kicker, vs Q-J.',you:'As Qs',them:'Qc Jc',board:'Qd 9h 4c',eq:[79,20],why:'About 79%. A dominated kicker again.'},
+{t:'est',q:'Turn: [9c 7s 2c 5s]. Kings vs a flush draw plus an ace.',you:'Ks Kh',them:'Ac Tc',board:'9c 7s 2c 5s',eq:[72,28],why:'About 72%. They have 12 outs out of 44 unseen cards ≈ 27%. The 2× rule says 24%.'},
+]},
+
+{id:'position',title:'Position',sub:'Why the last seat is the best seat',src:['beyond'],extra:true,
+facts:[['Button','acts last on every street after the flop'],['Later seat','play more hands'],['Blinds','act first after the flop, so play fewer hands there']],
+steps:[
+{t:'learn',h:'Who acts when',body:`<p>In a 6-player game the seats have names. The {{button}} is the dealer seat. The two seats to its left post the {{sb|small blind}} and {{bb|big blind}}. The first player to act before the flop sits "{{utg|under the gun}}".</p><p>After the flop the order changes: the blinds speak first and the button speaks <strong>last on every street</strong>.</p>`,viz:'seats'},
+{t:'learn',h:'Why acting last is worth money',body:`<p>When you are {{inpos|in position}}, you see what your opponent does before you decide.</p><ul><li><strong>Information:</strong> a check often means weakness, and a bet tells you something too.</li><li><strong>Free cards:</strong> with a draw, you can check behind and see the next card for nothing.</li><li><strong>Pot control:</strong> you decide whether the pot grows.</li><li><strong>Easier bluffs:</strong> when they check, you can take the pot away.</li></ul><p>This is why the blog says suited connectors are "best played when you have position".</p>`},
+{t:'learn',h:'Play more hands from later seats',body:`<p>Under the gun, five players still act behind you, and any of them could have a big hand. You'll also play the rest of the hand out of position. On the button only the blinds are left, and you act last after the flop. So the later your seat, the more hands you can play.</p>`,viz:'opens',note:`<b>Not from the blog.</b> These are rough figures from common 6-player opening charts. Exact numbers vary by game and player.`},
+{t:'mcq',q:'After the flop, which seat acts last?',opts:['Under the gun','Big blind','Button','Small blind'],a:2,why:'The button acts last on the flop, turn and river. That\'s why it\'s the best seat.'},
+{t:'mcq',q:'Where is [Kd Jc] most profitable to play?',opts:['Under the gun','On the button'],a:1,why:'Fewer players left to act behind you, and you\'ll act last for the rest of the hand.'},
+{t:'mcq',q:'You\'re in the big blind and one player calls. After the flop, you act…',opts:['First','Last'],a:0,why:'The blinds act first after the flop. You\'re out of position, which is why the blinds lose money for most players.'},
+{t:'mcq',q:'You have a flush draw in position and the opponent checks. What does position give you here?',opts:['Nothing special','The choice to bet, or check and see the next card free','A guaranteed flush'],a:1,why:'Acting last means you choose. You can semi-bluff, or take the free card.'},
+{t:'mcq',q:'Why play fewer hands under the gun?',opts:['The blinds are bigger there','Many players still act behind you, and you\'ll be out of position','You can\'t raise from there'],a:1,why:'More people left who could hold a monster, and a positional disadvantage for the rest of the hand.'},
+]},
+
+{id:'ranges',title:'Thinking in ranges',sub:'Put them on many hands, not one',src:['beyond'],extra:true,
+facts:[['6 · 4 · 12','ways to be dealt a pair · a suited hand · an off-suit hand'],['16','ways to be dealt two different ranks, like A-K'],['Blockers','cards you can see remove combos from their range']],
+steps:[
+{t:'learn',h:'Stop guessing one hand',body:`<p>Beginners think "he has A-K". Good players list everything the opponent could hold, their {{range}}, and how common each hand is. The blog does this all the time: an aggressive player who calls "is usually not holding sets", or a player whose range is {{capped}}.</p>`},
+{t:'learn',h:'Counting combinations',body:`<p>Some hands can be dealt in more ways than others. Each way is a {{combo}}.</p><ul><li>A specific pair, like aces: <strong>6</strong> combos.</li><li>A specific suited hand, like A-K suited: <strong>4</strong>.</li><li>A specific off-suit hand: <strong>12</strong>.</li></ul><p>So A-K (4 + 12 = 16 combos) comes up almost three times as often as pocket aces (6).</p>`,viz:'combos'},
+{t:'learn',h:'Cards you can see change the count',body:`<p>If you hold an ace, only 3 aces are left. Pocket aces drop from 6 combos to 3, and A-K drops from 16 to 12. Cards on the board work the same way. These cards are called {{blocker|blockers}}.</p>`},
+{t:'num',q:'How many ways can someone be dealt pocket kings?',ans:6,tol:0,why:'4 kings, choose 2: 4 × 3 ÷ 2 = 6.'},
+{t:'num',q:'How many ways can someone be dealt A-K (suited and off-suit together)?',ans:16,tol:0,why:'4 aces × 4 kings = 16. Four of them are suited.'},
+{t:'mcq',q:'You think the opponent has only aces, kings, or A-K. Which are they most likely to hold?',opts:['Aces','Kings','A-K'],a:2,why:'A-K has 16 combos. Aces and kings have 6 each. A-K is 16 of 28, about 57% of their range.'},
+{t:'num',q:'You hold [As Qd]. How many ways can your opponent have pocket aces?',ans:3,tol:0,why:'Only 3 aces are left. 3 × 2 ÷ 2 = 3 combos.'},
+{t:'num',q:'You hold [Ah Kd]. How many A-K combos can your opponent have?',ans:9,tol:0,why:'3 aces left × 3 kings left = 9.'},
+{t:'mcq',q:'An aggressive player just calls your raise on the flop. What does that do to their range?',opts:['Nothing','Removes most very strong hands, since they\'d usually raise those','Means they have the nuts'],a:1,why:'The blog\'s point: with sets or two pair they would often have raised. Calling narrows their range.'},
+]},
+
+{id:'ev',title:'Expected value',sub:'The one formula behind everything',src:['beyond','flush','bet'],extra:true,
+facts:[['EV','(win % × what you win) − (lose % × what you lose)'],['+EV','a good decision, even when it loses this time'],['Bluff EV','fold % × pot − call % × bet']],
+steps:[
+{t:'learn',h:'What a decision is worth on average',body:`<p>{{ev|Expected value}} (EV) answers one question: if you made this exact choice a thousand times, how much would you win or lose per time?</p><p><strong>EV = (chance you win × what you win) − (chance you lose × what you lose)</strong></p><p>Positive EV is a good decision. Negative EV is a mistake, even if it happens to work today. Pot odds, bluff maths and implied odds are all shortcuts for this formula.</p>`},
+{t:'learn',h:'Calling with a draw',body:`<p>The pot is $100 and the opponent bets $20. You have a flush draw (~35%). To keep it simple, assume no more betting.</p>`,viz:'ev',note:`<b>Same answer as pot odds.</b> You needed 14% and had 35%. EV just tells you how much the call is worth: about +$29 each time.`},
+{t:'learn',h:'Bluffing',body:`<p>You bluff $50 into a $100 pot. If they fold 40% of the time:</p><p>0.4 × $100 − 0.6 × $50 = $40 − $30 = <strong>+$10</strong>.</p><p>The break-even fold rate for a half-pot bet was 33% (level 8). They fold more than that, so the bluff earns money.</p>`},
+{t:'num',q:'You bluff $100 into a $100 pot. They fold 40% of the time. What\'s the EV in dollars?',ans:-20,tol:0,why:'0.4 × 100 − 0.6 × 100 = 40 − 60 = −$20. A pot-sized bluff needs 50% folds.'},
+{t:'num',q:'Pot $50. Opponent bets $50. You call $50 and win 25% of the time (no more betting). EV?',ans:-12.5,tol:0.6,why:'Win: 0.25 × $100 = $25. Lose: 0.75 × $50 = $37.50. EV = −$12.50. You needed 33% and had 25%.'},
+{t:'mcq',q:'You go all-in as an 80% favourite and lose. Was it a mistake?',opts:['Yes, you lost','No, it was +EV; you\'ll win this 8 times in 10'],a:1,why:'Judge a decision by its EV, not by one result.'},
+{t:'mcq',q:'How do implied odds fit into EV?',opts:['They increase "what you win" when you hit','They lower your chance to win','They don\'t'],a:0,why:'Future bets you collect after hitting are added to the win side of the formula.'},
+]},
+
+{id:'mindset',title:'Variance and tilt',sub:'Staying calm when good plays lose',src:['beyond'],extra:true,
+facts:[['45 in 100','times a 55% favourite still loses'],['20–30','buy-ins: a common cash-game bankroll guideline'],['Decisions','judge your play, not single results']],
+steps:[
+{t:'learn',h:'Good plays lose all the time',body:`<p>A 55% edge means you lose 45 times in 100. Over a handful of hands, luck decides. Over thousands, skill shows. These short-term swings are called {{variance}}.</p>`,viz:'variance'},
+{t:'learn',h:'Tilt',body:`<p>{{tilt|Tilt}} is playing worse because you're upset: chasing losses, calling too much, bluffing to "win it back".</p><ul><li>Set a stop-loss before you sit down, and keep to it.</li><li>After a bad beat, take a break before the next hand.</li><li>Review a hand by its math, not by whether you won.</li></ul>`},
+{t:'learn',h:'Bankroll',body:`<p>Only play with money you can afford to lose: a {{bankroll}} kept apart from what you need. A common guideline is 20–30 {{buyin|buy-ins}} for the cash game you play, and more (often 50–100) for tournaments, so a normal bad run doesn't wipe you out.</p>`,note:`<b>From the blog's disclaimer.</b> Poker involves skill and chance, losses are possible, and you should play within your limits.`},
+{t:'mcq',q:'You got all-in with aces against kings and lost. How should you judge it?',opts:['Bad decision','Good decision, bad result'],a:1,why:'Aces are about 81% against kings. Do it every time.'},
+{t:'mcq',q:'After three bad beats, you want to raise every hand to win it back. This is…',opts:['A smart adjustment','Tilt: time for a break'],a:1,why:'Emotion is choosing your hands, not math.'},
+{t:'mcq',q:'You have $300 for poker. Which game fits a 30 buy-in guideline?',opts:['$10 buy-in','$50 buy-in','$100 buy-in'],a:0,why:'$300 ÷ 30 = $10 per buy-in.'},
+{t:'mcq',q:'Can a 55% favourite lose 7 of the next 10 hands?',opts:['Practically never','Yes, it happens fairly often'],a:1,why:'Over 10 hands, it happens about 1 time in 10. Small samples swing a lot.'},
+]},
+
+{id:'fullhand',title:'Play a full hand',sub:'Use every level, street by street',src:['flush','bet'],extra:true,noPool:true,
+facts:[['Pre-flop','A-10 suited on the button: raise'],['Flop draw','bet when a passive player checks (semi-bluff)'],['River nuts','bet big for value']],
+steps:[
+{t:'learn',h:'The setup',body:`<p>6 players, 100 BB each. You're on the {{button}} with [Ah Th]. Everyone folds to you. The big blind is a cautious, {{passive}} player who folds when worried.</p><p>Each decision below uses something from an earlier level.</p>`},
+{t:'mcq',q:'Pre-flop: everyone folds to you on the button.',scene:{you:'Ah Th'},opts:['Raise','Just call','Fold'],a:0,why:'A big ace (at the A-10 cut-off), suited, in the best seat. Raise.'},
+{t:'learn',h:'The flop',body:`<p>The big blind calls. The pot is about 6 BB. The flop comes [8h 5h Kc] and the big blind checks to you.</p>`},
+{t:'mcq',q:'Your move?',scene:{you:'Ah Th',board:'8h 5h Kc'},opts:['Bet (semi-bluff)','Check behind','Fold'],a:0,why:'A passive player checked, which shows weakness. Bet: they may fold, and if they call you can still make the best flush.'},
+{t:'num',q:'How many outs do you have to the best possible flush?',ans:9,tol:0,why:'13 hearts minus the 4 you can see = 9.'},
+{t:'learn',h:'The turn',body:`<p>They call. The pot is about 12 BB. The turn is [2c]. You missed. They check again.</p>`},
+{t:'mcq',q:'This player is cautious. Your move?',scene:{you:'Ah Th',board:'8h 5h Kc 2c'},opts:['Bet big (~75% of the pot)','Fold','Go all-in'],a:0,why:'The blog\'s advice: a big turn bet pushes scared players off middle pairs. If they call, you still have flush outs and aces.'},
+{t:'num',q:'What if they had bet 12 BB into the 12 BB pot instead? What % would you need to call?',ans:33,tol:1,unit:'%',why:'Call 12 to win a final pot of 36: 12 ÷ 36 ≈ 33%.'},
+{t:'mcq',q:'You have ~9 outs (about 18–20% on the river) and need 33%. This cautious player rarely pays you off later. Call or fold?',opts:['Call','Fold'],a:1,why:'The price is too high, and implied odds against a cautious player won\'t make up the gap.'},
+{t:'learn',h:'The river',body:`<p>Back to the real hand: you bet 9 BB and they call. The pot is about 30 BB. The river is [Qh]. You've made the best possible flush. They check.</p>`},
+{t:'mcq',q:'Your move?',scene:{you:'Ah Th',board:'8h 5h Kc 2c Qh'},opts:['Bet big for value','Check','Small bluff'],a:0,why:'You have the best possible hand. The blog notes players cling to top pair. Make them pay.'},
+{t:'mcq',q:'Looking back: you bet the flop as a ___ and the river as a ___.',opts:['Bluff, then bluff','Semi-bluff, then value bet','Value bet, then protection'],a:1,why:'Flop: behind but drawing (semi-bluff). River: best hand, wanting a call (value).'},
+]},
+];
+
+/* ---------- viz ---------- */
+const EQ={
+ pre:[['Qs Qd','8d 8s',81,18.5],['Ks Kh','Js Th',85,14.5],['Ks Kh','As Th',71,28.5],['9s 9h','As Th',55,44.5],['As Kh','Qs Th',64,35],['As 2h','Qs Th',55,44.5]],
+ dom:[['As 2h','Ah Qs',23,71],['Ts Th','Td 8s',88,9],['Ts Th','Td As',68,30],['As Kd','Ah Qs',72,23]],
+ combo:[['Qh Th','Ac Ad',56,44,'9h 7h Js'],['7s 9s','Kc Ac',49.5,50.5,'As 9d 2s'],['Ac Kc','Jd Ts',53,47,'8c Td 6c']],
+};
+function eqRow(a,b,pa,pb,board,guess){
+  const tie=Math.max(0,100-pa-pb);
+  return `<div class="eqrow"><div class="lbl"><span>${hand(a)} <span class="muted">vs</span> ${hand(b)}${board?` <span class="muted">on</span> ${hand(board)}`:''}</span>
+  <span class="num"><span style="color:var(--felt)">${r(pa)}%</span> · <span style="color:var(--suit)">${r(pb)}%</span>${tie>=1?` <span class="muted">· tie ${r(tie)}%</span>`:''}</span></div>
+  <div class="eqbar"><i class="a" style="width:${pa}%"></i><i class="t" style="width:${tie}%"></i><i class="b" style="width:${pb}%"></i>${guess!=null?`<span class="guess" style="left:calc(${guess}% - 1px)"></span>`:''}</div></div>`;
+}
+const r=x=>Math.round(x);
+const VIZ={
+ 'eq:pre':()=>`<div class="viz">${EQ.pre.map(e=>eqRow(...e)).join('')}<div class="cap">Simulated with 20,000 deals each. Matches the blog except one typo.</div></div>`,
+ 'eq:dom':()=>`<div class="viz">${EQ.dom.map(e=>eqRow(...e)).join('')}<div class="cap">Grey = tie (shared ace or ten means split pots happen more).</div></div>`,
+ 'eq:combo':()=>`<div class="viz">${EQ.combo.map(e=>eqRow(...e)).join('')}<div class="cap">Green is the drawing hand. Simulated from the flop.</div></div>`,
+ streets:()=>`<div class="viz"><div class="slots">
+   <div class="g"><span>Your cards</span>${hand('As Kh')}</div>
+   <div class="g"><span>Flop</span>${hand('Qd 9h 4c')}</div>
+   <div class="g"><span>Turn</span>${hand('Jc')}</div>
+   <div class="g"><span>River</span>${hand('Ts')}</div></div>
+   <div class="cap">Four betting rounds: pre-flop, flop, turn, river. Here A-K made a straight on the river (10-J-Q-K-A).</div></div>`,
+ ranks:()=>{const rows=[['Straight flush','9h Th Jh Qh Kh','five in a row, same suit'],['Four of a kind','7s 7h 7d 7c','four cards of one rank'],['Full house','Ks Kh Kd 4c 4s','three of one + two of another'],['Flush','2d 7d 9d Jd Ad','five of the same suit'],['Straight','5c 6h 7s 8d 9c','five in a row, any suits'],['Three of a kind','8s 8h 8c','three of one rank'],['Two pair','Js Jd 5h 5c',''],['One pair','Qs Qh',''],['High card','Ad','nothing; highest card plays']];
+   return `<div class="viz ranks">${rows.map((x,i)=>`<div><span class="num muted">${i+1}</span><span>${hand(x[1])}</span><span><b style="font-weight:600">${x[0]}</b> <small>${x[2]}</small></span></div>`).join('')}</div>`},
+ stacks:()=>{const s=[['Short',10,'win now: big pairs, strong aces'],['Shallow',30,'top pair is strong, get value fast'],['Deep',100,'draws and tricky plays gain value']];
+   return `<div class="viz">${s.map(([n,v,d])=>`<div class="eqrow"><div class="lbl"><span><b style="font-weight:600">${n}</b> <span class="muted">· ${d}</span></span><span class="num">${v} BB</span></div><div class="eqbar"><i class="a" style="width:${v}%"></i></div></div>`).join('')}</div>`},
+ range:()=>{const R='AKQJT98765432',out=[];let core=0,some=0;
+   const cls=(i,j)=>{const hi=R[Math.min(i,j)],lo=R[Math.max(i,j)];const suited=i<j;
+     if(i===j)return 'core';
+     if(hi==='A'&&(suited||'KQJT'.includes(lo)))return 'core';
+     if('AKQJT'.includes(hi)&&'AKQJT'.includes(lo))return 'core';
+     if(suited&&['T9','98','87'].includes(hi+lo))return 'core';
+     if(suited&&hi+lo==='76')return 'some';return ''};
+   for(let i=0;i<13;i++)for(let j=0;j<13;j++){const c=cls(i,j);const n=i===j?6:(i<j?4:12);if(c==='core')core+=n;if(c==='some')some+=n;
+     const lbl=i===j?R[i]+R[i]:(i<j?R[i]+R[j]+'s':R[j]+R[i]+'o');out.push(`<div class="${c}" title="${lbl}">${lbl.slice(0,2)}</div>`)}
+   return `<div class="viz"><div class="grid13">${out.join('')}</div>
+   <div class="legend"><span><i style="background:var(--felt)"></i>Play (${(core/1326*100).toFixed(0)}% of all deals)</span><span><i style="background:var(--felt-soft);outline:1px dashed var(--felt)"></i>7-6 suited (cheat sheet adds it)</span></div>
+   <div class="cap">Top-right of the diagonal = suited. Bottom-left = off-suit. "T" = 10.</div></div>`},
+ outs:()=>{const W=600,H=230,L=34,B=30,T=14,bw=(W-L-10)/15;const y=v=>T+(H-T-B)*(1-v/60);
+   let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:420px" role="img" aria-label="Chance by river versus outs">`;
+   [0,20,40,60].forEach(v=>{s+=`<line x1="${L}" x2="${W-6}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${L-6}" y="${y(v)+4}" text-anchor="end">${v}%</text>`});
+   for(let o=1;o<=15;o++){const ex=(1-C(47-o,2)/C(47,2))*100,ru=o*4,x=L+(o-1)*bw;
+     s+=`<rect x="${x+bw*.12}" y="${y(ru)}" width="${bw*.36}" height="${y(0)-y(ru)}" fill="var(--felt-soft)" stroke="var(--felt)" stroke-width=".6"/>`;
+     s+=`<rect x="${x+bw*.5}" y="${y(ex)}" width="${bw*.36}" height="${y(0)-y(ex)}" fill="var(--felt)"/>`;
+     s+=`<text x="${x+bw/2}" y="${H-12}" text-anchor="middle" class="${[4,8,9].includes(o)?'ink':''}">${o}</text>`}
+   s+=`<text x="${W/2}" y="${H}" text-anchor="middle">outs</text></svg>`;
+   return `<div class="viz">${s}<div class="legend"><span><i style="background:var(--felt-soft);outline:1px solid var(--felt)"></i>4× rule</span><span><i style="background:var(--felt)"></i>exact chance by the river</span></div><div class="cap">4 outs: rule 16%, exact 16.5%. 9 outs: 36% vs 35%. 15 outs: 60% vs 54%.</div></div>`},
+ potodds:()=>`<div class="viz">
+   <div class="eqrow"><div class="lbl"><span>Final pot: $100 pot + $20 bet + <b style="font-weight:600">$20 your call</b></span><span class="num">$140</span></div>
+   <div class="eqbar"><i class="t" style="width:71.4%;background:var(--muted);opacity:.35"></i><i class="b" style="width:14.3%;opacity:.6"></i><i class="a" style="width:14.3%"></i></div></div>
+   <div class="eqrow"><div class="lbl"><span>You need to win</span><span class="num">14%</span></div><div class="eqbar"><i class="b" style="width:14%"></i></div></div>
+   <div class="eqrow"><div class="lbl"><span>A flush draw on the flop wins</span><span class="num">35%</span></div><div class="eqbar"><i class="a" style="width:35%"></i></div></div>
+   <div class="cap">When the green bar is longer than the red one, calling makes money over time.</div></div>`,
+ flushnums:()=>{const f=[['Flush draw by the river (from the flop)',35],['Flush draw on the turn alone',19.6],['Two suited cards flop a flush draw',11],['Two suited cards make a flush by the river',6.5],['Backdoor flush (needs turn and river)',4],['Two suited cards flop a full flush',0.84]];
+   return `<div class="viz">${f.map(([n,v])=>`<div class="eqrow"><div class="lbl"><span>${n}</span><span class="num">${v}%</span></div><div class="eqbar"><i class="a" style="width:${v}%"></i></div></div>`).join('')}</div>`},
+ bluff:()=>{const b=[['¼ pot',.25],['⅓ pot',1/3],['½ pot',.5],['¾ pot',.75],['Full pot',1],['2× pot',2]];
+   return `<div class="viz">${b.map(([n,x])=>{const v=x/(1+x)*100;return `<div class="eqrow"><div class="lbl"><span>Bet ${n}</span><span class="num">must work ${r(v)}%</span></div><div class="eqbar"><i class="b" style="width:${v}%"></i><span class="guess" style="left:67%;background:var(--felt)"></span></div></div>`}).join('')}
+   <div class="legend"><span><i style="background:var(--felt)"></i>~67%: how often a random hand misses the flop</span></div>
+   <div class="cap">Smaller bluffs need to work less often. Fold rates in real games are lower than 67%.</div></div>`},
+ players:()=>{const W=600,H=220,L=96,Rr=14,x=v=>L+(W-L-Rr)*v/100;const rows=[['Rock',6,12,'p'],['TAG',15,20,'a'],['LAG',25,40,'a'],['Calling station',35,60,'p'],['Maniac',40,100,'a']];
+   let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:420px" role="img" aria-label="VPIP ranges by player type">`;
+   [0,20,40,60,80,100].forEach(v=>{s+=`<line x1="${x(v)}" x2="${x(v)}" y1="8" y2="${H-28}" stroke="var(--line)"/><text x="${x(v)}" y="${H-12}" text-anchor="middle">${v}%</text>`});
+   rows.forEach(([n,a,b,k],i)=>{const yy=18+i*36;s+=`<text x="${L-10}" y="${yy+13}" text-anchor="end" class="ink">${n}</text><rect x="${x(a)}" y="${yy}" width="${Math.max(6,x(b)-x(a))}" height="18" rx="9" fill="${k==='a'?'var(--suit)':'var(--felt)'}"/>`});
+   s+=`<text x="${(L+W)/2}" y="${H}" text-anchor="middle">VPIP: % of hands they play</text></svg>`;
+   return `<div class="viz">${s}<div class="legend"><span><i style="background:var(--felt)"></i>passive (calls more)</span><span><i style="background:var(--suit)"></i>aggressive (bets and raises)</span></div><div class="cap">Ranges from the blog's cheat sheet. Rock is "~10%".</div></div>`},
+ seats:()=>{const row=(lbl,seq)=>`<div class="g" style="display:flex;flex-direction:column;gap:6px"><span class="cap">${lbl}</span><div class="chips">${seq.map((s,i)=>`${i?'<span class="arrow">→</span>':''}<span class="tag ${s==='Button'?'hi':''}">${s}</span>`).join('')}</div></div>`;
+   return `<div class="viz">${row('Before the flop, the order of action is',['UTG','Hijack','Cutoff','Button','Small blind','Big blind'])}${row('After the flop (flop, turn, river)',['Small blind','Big blind','UTG','Hijack','Cutoff','Button'])}<div class="cap">The button is last after the flop on every street. The blinds act last only before the flop.</div></div>`},
+ opens:()=>{const o=[['Under the gun',15],['Hijack',19],['Cutoff',27],['Button',43],['Small blind',36]];
+   return `<div class="viz">${o.map(([n,v])=>`<div class="eqrow"><div class="lbl"><span>${n}</span><span class="num">~${v}% of hands</span></div><div class="eqbar"><i class="a" style="width:${v}%"></i></div></div>`).join('')}<div class="cap">Roughly how many hands strong players open with a raise from each seat when everyone before them folded.</div></div>`},
+ combos:()=>{const g=(t,hs)=>`<div class="g"><span class="cap">${t}</span><div class="hands">${hs.map(hand).join('')}</div></div>`;
+   const S4='shdc',aa=[],aks=[],ako=[];
+   for(let i=0;i<4;i++)for(let j=i+1;j<4;j++)aa.push(`A${S4[i]} A${S4[j]}`);
+   for(const a of S4)for(const k of S4)(a===k?aks:ako).push(`A${a} K${k}`);
+   return `<div class="viz combos">${g('Pocket aces: 6 combos',aa)}${g('A-K suited: 4 combos',aks)}${g('A-K off-suit: 12 combos',ako)}</div>`},
+ ev:()=>`<div class="viz">
+   <div class="eqrow"><div class="lbl"><span>Win 35% of the time · collect $120 (pot + their bet)</span><span class="num" style="color:var(--felt)">+$42</span></div><div class="eqbar"><i class="a" style="width:35%"></i></div></div>
+   <div class="eqrow"><div class="lbl"><span>Lose 65% of the time · lose your $20 call</span><span class="num" style="color:var(--suit)">−$13</span></div><div class="eqbar"><i class="b" style="width:65%"></i></div></div>
+   <div class="lbl" style="display:flex;justify-content:space-between;border-top:1px solid var(--line);padding-top:10px"><b style="font-weight:600">EV of calling</b><span class="num" style="color:var(--felt)">+$29 per call</span></div></div>`,
+ variance:()=>{let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;const a=Array(100).fill(0).map((_,i)=>i<55?1:0);
+   for(let i=99;i>0;i--){const j=Math.floor(rnd()*(i+1));[a[i],a[j]]=[a[j],a[i]]}
+   const first10=a.slice(0,10).reduce((x,y)=>x+y,0);
+   return `<div class="viz"><div class="sqs">${a.map(w=>`<i class="${w?'':'l'}"></i>`).join('')}</div>
+   <div class="legend"><span><i style="background:var(--felt)"></i>won (55)</span><span><i style="background:var(--suit)"></i>lost (45)</span></div>
+   <div class="cap">100 hands as a 55% favourite, in the order they might come. The first row of ten alone went ${first10}–${10-first10}.</div></div>`},
+};
+function C(n,k){let x=1;for(let i=0;i<k;i++)x=x*(n-i)/(i+1);return x}
+
+/* ---------- rendering helpers ---------- */
+const SU={s:'♠',h:'♥',d:'♦',c:'♣'};
+function card(c){const rk=c[0]==='T'?'10':c[0],s=c[1];return `<span class="pc${'hd'.includes(s)?' r':''}">${rk}${SU[s]}</span>`}
+function hand(str){return `<span class="hand">${str.trim().split(/\s+/).map(card).join('')}</span>`}
+function fmt(s){return s.replace(/\[((?:[2-9TJQKA][shdc]\s?)+)\]/g,(_,h)=>hand(h))
+  .replace(/\{\{([a-z]+)(?:\|([^}]+))?\}\}/g,(_,k,t)=>`<button class="term" data-k="${k}">${t||G[k].w}</button>`)}
+function scene(o){if(!o)return '';const row=(l,h)=>h?`<div class="who"><span>${l}</span><span>${hand(h)}</span></div>`:'';
+  return `<div class="scene">${row('You',o.you)}${row('Them',o.them)}${row('Board',o.board)}</div>`}
+
+/* ---------- state ---------- */
+const KEY='math-optimal-poker-v1';
+function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.done)return s}catch(e){}return {xp:0,done:{},review:[],streak:{last:'',n:0}}}
+let S=load();
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+const today=()=>new Date().toISOString().slice(0,10);
+function bumpStreak(){const t=today();if(S.streak.last===t)return;const y=new Date(Date.now()-864e5).toISOString().slice(0,10);S.streak.n=S.streak.last===y?S.streak.n+1:1;S.streak.last=t}
+const isUnlocked=i=>i===0||!!S.done[LEVELS[i-1].id];
+const allDone=()=>LEVELS.every(l=>S.done[l.id]);
+const quizSteps=l=>l.steps.map((s,i)=>({lv:l.id,si:i,s})).filter(x=>x.s.t!=='learn');
+const findStep=ref=>{const[l,i]=ref.split(':');const L=LEVELS.find(x=>x.id===l);return L&&L.steps[+i]?{lv:l,si:+i,s:L.steps[+i]}:null};
+const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+
+/* ---------- screens ---------- */
+const app=document.getElementById('app');
+let P=null; // current play session
+
+function home(){
+  P=null;
+  const doneN=LEVELS.filter(l=>S.done[l.id]).length;
+  const nextI=LEVELS.findIndex((l,i)=>!S.done[l.id]&&isUnlocked(i));
+  const finalDone=S.done.final;
+  app.innerHTML=`
+  <header class="top"><span class="eyebrow">A course from the PokerTheory blog</span><h1>Math-Optimal Poker</h1>
+  <p>${LEVELS.length} short levels, from "what is the flop" to playing a full hand. Learn a little, then prove it in a quiz or game. Tap any underlined word for a plain-English meaning.</p></header>
+  <div class="stats"><div class="stat"><b>${S.xp}</b><span>XP</span></div><div class="stat"><b>${doneN}/${LEVELS.length}</b><span>levels done</span></div><div class="stat"><b>${S.streak.n}</b><span>day streak</span></div><div class="stat"><b>${S.review.length}</b><span>cards to review</span></div></div>
+  <nav class="path">${LEVELS.map((l,i)=>{const d=S.done[l.id],u=isUnlocked(i),nx=i===nextI;
+    return `${l.extra&&!LEVELS[i-1].extra?'<div class="divider eyebrow">Beyond the blog · general poker knowledge</div>':''}<button class="lv ${d?'done':''} ${nx?'next':''} ${u?'':'locked'}" data-go="${l.id}" ${u?'':'disabled'}>
+      <span class="dot">${d?'✓':i}</span><span class="t"><b>${l.title}</b><small>${l.sub}</small></span>
+      ${d?stars(d.stars):nx?'<span class="tag">Start</span>':u?'<span class="tag">Open</span>':'<span class="tag">Locked</span>'}</button>`}).join('')}
+    <button class="lv ${finalDone?'done':''} ${allDone()&&!finalDone?'next':''} ${allDone()?'':'locked'}" data-go="final" ${allDone()?'':'disabled'}>
+      <span class="dot">★</span><span class="t"><b>Final table</b><small>15 mixed questions from every level</small></span>${finalDone?stars(finalDone.stars):allDone()?'<span class="tag">Start</span>':'<span class="tag">Finish all levels</span>'}</button>
+  </nav>
+  <section class="tools">
+    <button class="tool" data-go="review" ${S.review.length?'':'disabled'}><b>Review deck</b><small>${S.review.length?`${S.review.length} question${S.review.length>1?'s':''} you missed`:'Questions you miss land here'}</small></button>
+    <button class="tool" data-go="recall" ${doneN?'':'disabled'}><b>Daily recall</b><small>${doneN?'5 random questions from finished levels':'Finish a level to unlock'}</small></button>
+    <button class="tool" data-go="sheet"><b>Your cheat sheet</b><small>Facts you've collected</small></button>
+    <button class="tool" data-go="gloss"><b>Glossary</b><small>${Object.keys(G).length} terms in plain English</small></button>
+    <button class="tool" data-go="sync"><b>Move my progress</b><small>Copy a code here, paste it on another device</small></button>
+  </section>
+  <p class="src">Source: <a href="https://pokertheoryblog.substack.com" target="_blank" rel="noopener">pokertheoryblog.substack.com</a>, all 5 posts. Percentages checked with a simulator; corrections are flagged. Your progress is saved in this browser.</p>`;
+}
+function stars(n){return `<span class="stars">${[1,2,3].map(i=>i<=n?'★':'<span class="off">★</span>').join('')}</span>`}
+
+function startLevel(id){
+  const L=LEVELS.find(l=>l.id===id);
+  P={mode:'level',id,title:L.title,steps:L.steps.map((s,i)=>({lv:id,si:i,s})),i:0,score:0,max:0,xp:0,sub:0,subScore:0};
+  renderStep();
+}
+function startSet(mode,refs,title){P={mode,id:mode,title,steps:refs,i:0,score:0,max:0,xp:0,sub:0,subScore:0};renderStep()}
+function startFinal(){startSet('final',shuffle(LEVELS.slice(1).filter(l=>!l.noPool).flatMap(l=>quizSteps(l).filter(x=>x.s.t!=='sort'))).slice(0,15),'Final table')}
+function startRecall(){const pool=LEVELS.filter(l=>S.done[l.id]&&!l.noPool).flatMap(l=>quizSteps(l).filter(x=>x.s.t!=='sort'));startSet('recall',shuffle(pool).slice(0,5),'Daily recall')}
+function startReview(){startSet('review',shuffle(S.review.map(findStep).filter(Boolean)).slice(0,10),'Review deck')}
+
+function frame(inner){
+  const pct=P.i/P.steps.length*100;
+  app.innerHTML=`<div class="bar"><button class="x" data-go="home" aria-label="Back to levels">×</button><div class="prog"><i style="width:${pct}%"></i></div><span class="xp">+${P.xp} XP</span></div>
+  <div class="step">${inner}</div>`;
+}
+function renderStep(){
+  if(P.i>=P.steps.length)return finish();
+  const {s}=P.steps[P.i];
+  const head=`<span class="eyebrow">${P.title} · ${P.i+1} of ${P.steps.length}</span>`;
+  if(s.t==='learn'){
+    frame(`${head}<h2>${s.h}</h2><div class="prose">${fmt(s.body)}</div>${s.viz?VIZ[s.viz]():''}${s.note?`<aside class="note">${s.note}</aside>`:''}<button class="btn" id="next">Continue</button>`);
+  } else if(s.t==='mcq'){
+    const order=P.order=s.opts.map((_,i)=>i);
+    frame(`${head}<p class="q">${fmt(s.q)}</p>${scene(s.scene)}<div class="opts">${order.map((oi,k)=>`<button class="opt" data-opt="${oi}"><span class="k">${k+1}</span><span>${fmt(s.opts[oi])}</span></button>`).join('')}</div><div id="fb"></div>`);
+  } else if(s.t==='est'){
+    frame(`${head}<p class="q">${fmt(s.q)}</p>${scene({you:s.you,them:s.them,board:s.board})}
+     <div class="est"><label for="estin" class="muted">Your guess: how often does <b style="color:var(--felt)">your</b> hand win?</label><span class="val num" id="estv">50%</span><input type="range" id="estin" min="0" max="100" value="50"></div>
+     <button class="btn" id="check">Lock in guess</button><div id="fb"></div>`);
+    const inp=document.getElementById('estin');inp.oninput=()=>document.getElementById('estv').textContent=inp.value+'%';
+  } else if(s.t==='num'){
+    frame(`${head}<p class="q">${fmt(s.q)}</p><div class="row"><input class="numin" id="numin" type="number" inputmode="decimal" aria-label="Your answer">${s.unit?`<span class="muted">${s.unit}</span>`:''}</div><button class="btn" id="check">Check</button><div id="fb"></div>`);
+    setTimeout(()=>document.getElementById('numin')?.focus(),30);
+  } else if(s.t==='sort'){
+    if(P.sub===0)P.subScore=0;
+    const it=s.items[P.sub];
+    frame(`${head}<p class="q">${s.q}</p><span class="muted num">Hand ${P.sub+1} of ${s.items.length} · ${P.subScore} right so far</span>
+     <div class="sortcard">${hand(it.h)}</div><div class="sortbtns">${s.choices.map((c,i)=>`<button class="opt" data-sort="${i}"><span class="k">${i===0?'←':'→'}</span>${c}</button>`).join('')}</div><div id="fb"></div>`);
+  }
+}
+function feedback(kind,title,why,extra=''){
+  document.getElementById('fb').innerHTML=`<div class="fb ${kind}"><h3>${title}</h3><p>${fmt(why)}</p>${extra}</div><button class="btn" id="next" style="margin-top:12px">Continue</button>`;
+  document.getElementById('next').focus({preventScroll:true});
+  document.getElementById('next').scrollIntoView({block:'nearest',behavior:'smooth'});
+}
+const REF=()=>`${P.steps[P.i].lv}:${P.steps[P.i].si}`;
+function grade(pts,full){ // pts 0..1
+  P.max+=1;P.score+=pts;const xp=Math.round(10*pts);P.xp+=xp;S.xp+=xp;
+  const ref=REF();
+  if(pts<1&&!S.review.includes(ref))S.review.push(ref);
+  if(pts>=1&&P.mode==='review')S.review=S.review.filter(x=>x!==ref);
+  save();
+}
+const PRAISE=['Correct','Nice','Spot on','Exactly','Right'];
+const praise=()=>PRAISE[Math.floor(Math.random()*PRAISE.length)];
+
+app.addEventListener('click',e=>{
+  const t=e.target.closest('button');if(!t)return;
+  if(t.classList.contains('term'))return;
+  if(t.dataset.go)return go(t.dataset.go);
+  if(t.id==='next'){ const s=P.steps[P.i].s; if(s.t==='sort'&&P.sub<s.items.length-1&&P.sortPending){P.sub++;P.sortPending=false;return renderStep()} P.sub=0;P.sortPending=false;P.i++;return renderStep()}
+  if(t.dataset.opt!=null)return answerMcq(+t.dataset.opt);
+  if(t.dataset.sort!=null)return answerSort(+t.dataset.sort);
+  if(t.id==='check'){const s=P.steps[P.i].s;return s.t==='est'?answerEst():answerNum()}
+});
+function answerMcq(oi){
+  const s=P.steps[P.i].s;if(P.answered===P.i)return;P.answered=P.i;
+  document.querySelectorAll('.opt').forEach(b=>{b.disabled=true;const o=+b.dataset.opt;if(o===s.a)b.classList.add('right');else if(o===oi)b.classList.add('wrong')});
+  const ok=oi===s.a;grade(ok?1:0);
+  feedback(ok?'ok':'bad',ok?praise()+' · +10 XP':'Not quite',s.why);
+}
+function answerEst(){
+  const s=P.steps[P.i].s;if(P.answered===P.i)return;P.answered=P.i;
+  const g=+document.getElementById('estin').value;document.getElementById('estin').disabled=true;document.getElementById('check').disabled=true;
+  const d=Math.abs(g-s.eq[0]);const pts=d<=6?1:d<=12?.5:0;grade(pts);
+  const bar=`<div style="margin-top:6px">${eqRow(s.you,s.them,s.eq[0],s.eq[1],s.board,g)}</div><p class="muted" style="font-size:.85rem">The black tick is your guess (${g}%). You were ${r(d)} points off.</p>`;
+  feedback(pts===1?'ok':pts?'mid':'bad',pts===1?`${praise()} · +10 XP`:pts?'Close · +5 XP':'Off by a lot',s.why,bar);
+}
+function answerNum(){
+  const s=P.steps[P.i].s;const v=parseFloat(document.getElementById('numin').value);if(isNaN(v))return;if(P.answered===P.i)return;P.answered=P.i;
+  document.getElementById('check').disabled=true;document.getElementById('numin').disabled=true;
+  const ok=Math.abs(v-s.ans)<=s.tol;grade(ok?1:0);
+  feedback(ok?'ok':'bad',ok?praise()+' · +10 XP':`The answer is ${s.ans}${s.unit||''}`,s.why);
+}
+function answerSort(c){
+  const s=P.steps[P.i].s,it=s.items[P.sub];if(P.sortPending)return;P.sortPending=true;
+  document.querySelectorAll('[data-sort]').forEach(b=>{b.disabled=true;const o=+b.dataset.sort;if(o===it.a)b.classList.add('right');else if(o===c)b.classList.add('wrong')});
+  const ok=c===it.a;if(ok)P.subScore++;
+  const last=P.sub===s.items.length-1;
+  if(last){const pts=P.subScore/s.items.length;P.max+=1;P.score+=pts;const xp=Math.round(10*s.items.length*pts/3);P.xp+=xp;S.xp+=xp;if(pts<.75&&!S.review.includes(REF()))S.review.push(REF());save()}
+  feedback(ok?'ok':'bad',ok?'Right':'No, '+s.choices[it.a].toLowerCase(),it.why,last?`<p class="muted" style="font-size:.85rem">Round over: ${P.subScore} of ${s.items.length}.</p>`:'');
+  if(!last)document.getElementById('next').textContent='Next hand';
+}
+function finish(){
+  const pct=P.max?P.score/P.max:1;const st=pct>=.9?3:pct>=.7?2:1;
+  bumpStreak();
+  let bonus='';
+  if(P.mode==='level'||P.mode==='final'){
+    const prev=S.done[P.id];if(!prev){S.xp+=20;P.xp+=20;bonus='+20 XP for finishing'}
+    S.done[P.id]={stars:Math.max(st,prev?.stars||0)};
+  }
+  save();
+  const L=LEVELS.find(l=>l.id===P.id);
+  const nextI=L?LEVELS.indexOf(L)+1:-1;
+  app.innerHTML=`<div class="result"><span class="eyebrow">${P.title} · complete</span>
+    ${P.mode==='level'||P.mode==='final'?`<div class="big-stars">${[1,2,3].map(i=>i<=st?'★':'<span class="off">★</span>').join('')}</div>`:''}
+    <h2>${P.max?`${r(pct*100)}% right`:'Done'}</h2><p class="muted num">+${P.xp} XP this round${bonus?' · '+bonus:''}</p>
+    ${L&&L.facts?`<div class="viz"><span class="eyebrow">Added to your cheat sheet</span><div class="facts">${L.facts.map(f=>`<div class="fact"><span class="n">${f[0]}</span><span>${f[1]}</span></div>`).join('')}</div></div>`:''}
+    ${st<3&&P.mode==='level'?`<p class="muted">Get 90% for three stars. Missed questions are now in your review deck.</p>`:''}
+    <div class="row">${nextI>0&&nextI<LEVELS.length?`<button class="btn" data-go="${LEVELS[nextI].id}">Next: ${LEVELS[nextI].title}</button>`:nextI===LEVELS.length&&allDone()?`<button class="btn" data-go="final">Play the final table</button>`:''}
+    <button class="btn ghost" data-go="home">All levels</button></div></div>`;
+}
+function sheet(){
+  app.innerHTML=`<button class="back" data-go="home">← All levels</button><header class="top"><span class="eyebrow">Collect them all</span><h2>Your cheat sheet</h2><p>Each finished level adds its key numbers here. Greyed-out facts are still locked.</p></header>
+  ${LEVELS.map(l=>{const d=!!S.done[l.id];return `<section class="viz"><span class="eyebrow">${l.title}</span><div class="facts">${l.facts.map(f=>`<div class="fact ${d?'':'lockd'}"><span class="n">${d?f[0]:'···'}</span><span>${d?f[1]:'Finish this level to reveal'}</span></div>`).join('')}</div></section>`}).join('')}`;
+}
+function gloss(){
+  const ks=Object.keys(G).sort((a,b)=>G[a].w.localeCompare(G[b].w));
+  app.innerHTML=`<button class="back" data-go="home">← All levels</button><header class="top"><span class="eyebrow">Plain English</span><h2>Glossary</h2></header>
+  <div class="gloss">${ks.map(k=>`<div><b>${G[k].w}</b><span class="muted">${G[k].d}</span></div>`).join('')}</div>`;
+}
+const CODE_PREFIX='MOP1:';
+function exportCode(){return CODE_PREFIX+btoa(JSON.stringify(S))}
+function parseCode(txt){
+  try{const t=txt.trim();if(!t.startsWith(CODE_PREFIX))return null;const s=JSON.parse(atob(t.slice(CODE_PREFIX.length)));
+    if(!s||typeof s.xp!=='number'||typeof s.done!=='object'||!Array.isArray(s.review))return null;
+    s.streak=s.streak&&typeof s.streak.n==='number'?s.streak:{last:'',n:0};return s}catch(e){return null}
+}
+function sync(){
+  const doneN=Object.keys(S.done).length;
+  app.innerHTML=`<button class="back" data-go="home">← All levels</button>
+  <header class="top"><span class="eyebrow">Phone ↔ laptop</span><h2>Move my progress</h2>
+  <p>Progress is saved separately on each device. To move it, copy the code on one device and paste it on the other.</p></header>
+  <section class="viz sync"><h3>1 · Copy from this device</h3>
+    <p class="muted">${S.xp} XP · ${doneN} level${doneN===1?'':'s'} done · ${S.review.length} in review</p>
+    <textarea class="code" id="outcode" readonly aria-label="Your progress code">${exportCode()}</textarea>
+    <div class="row"><button class="btn" id="copycode">Copy code</button><span class="msg" id="copymsg"></span></div>
+  </section>
+  <section class="viz sync"><h3>2 · Paste on the other device</h3>
+    <textarea class="code" id="incode" placeholder="Paste a code that starts with MOP1:" aria-label="Paste a progress code"></textarea>
+    <div class="row"><button class="btn" id="loadcode">Load progress</button><span class="msg" id="loadmsg"></span></div>
+  </section>`;
+  let armed=null;
+  document.getElementById('copycode').onclick=async()=>{
+    const ta=document.getElementById('outcode'),m=document.getElementById('copymsg');
+    try{await navigator.clipboard.writeText(ta.value);m.className='msg ok';m.textContent='Copied. Now paste it on your other device.'}
+    catch(e){ta.focus();ta.select();m.className='msg';m.textContent='Code selected. Copy it with your device\'s copy command.'}
+  };
+  document.getElementById('incode').oninput=()=>{armed=null;document.getElementById('loadcode').textContent='Load progress';document.getElementById('loadmsg').textContent=''};
+  document.getElementById('loadcode').onclick=()=>{
+    const m=document.getElementById('loadmsg'),b=document.getElementById('loadcode');
+    const s=parseCode(document.getElementById('incode').value);
+    if(!s){m.className='msg bad';m.textContent='That code didn\'t work. Copy the whole code, starting with MOP1:';return}
+    if(!armed){armed=s;m.className='msg bad';m.textContent=`This replaces this device's progress with ${s.xp} XP and ${Object.keys(s.done).length} levels done.`;b.textContent='Yes, replace it';return}
+    S=armed;save();home();
+  };
+}
+function go(where){
+  window.scrollTo({top:0});
+  if(where==='home')return home();
+  if(where==='sync')return sync();
+  if(where==='sheet')return sheet();
+  if(where==='gloss')return gloss();
+  if(where==='review')return startReview();
+  if(where==='recall')return startRecall();
+  if(where==='final')return startFinal();
+  if(LEVELS.some(l=>l.id===where))return startLevel(where);
+}
+
+/* ---------- term popover ---------- */
+const pop=document.getElementById('pop');
+document.addEventListener('click',e=>{
+  const t=e.target.closest('.term');
+  if(!t){pop.hidden=true;return}
+  const g=G[t.dataset.k];if(!g)return;
+  pop.innerHTML=`<b>${g.w}</b>${g.d}`;pop.hidden=false;
+  const rc=t.getBoundingClientRect();const w=Math.min(300,window.innerWidth-32);pop.style.maxWidth=w+'px';
+  let left=rc.left+window.scrollX;left=Math.min(left,window.scrollX+window.innerWidth-w-16);left=Math.max(16,left);
+  pop.style.left=left+'px';pop.style.top=(rc.bottom+window.scrollY+8)+'px';
+});
+
+/* ---------- keyboard ---------- */
+document.addEventListener('keydown',e=>{
+  if(!P)return;
+  if(e.key==='Enter'){const b=document.getElementById('next')||document.getElementById('check');if(b&&!b.disabled){e.preventDefault();b.click()}return}
+  const s=P.steps[P.i]?.s;if(!s)return;
+  if(s.t==='mcq'&&/^[1-9]$/.test(e.key)){const b=document.querySelectorAll('.opt')[+e.key-1];if(b&&!b.disabled)b.click()}
+  if(s.t==='sort'){if(e.key==='ArrowLeft')document.querySelector('[data-sort="0"]:not(:disabled)')?.click();if(e.key==='ArrowRight')document.querySelector('[data-sort="1"]:not(:disabled)')?.click()}
+});
+
+home();
+</script>
+
+</body>
+</html>
